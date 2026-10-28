@@ -8,9 +8,19 @@ if (!process.env.DATABASE_URL) {
 
 const isSupabase = process.env.DATABASE_URL.includes("supabase.com");
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ...(isSupabase ? { ssl: { rejectUnauthorized: false } } : {}),
-});
+declare global {
+  var __pgPool: Pool | undefined;
+}
+
+const pool =
+  globalThis.__pgPool ??
+  new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ...(isSupabase ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalThis.__pgPool = pool;
+}
 
 export const db = drizzle(pool, { schema });

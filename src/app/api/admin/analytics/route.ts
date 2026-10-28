@@ -13,8 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks, auditEvents } from "@/src/db/schema";
-import { eq, sql, count, avg, desc } from "drizzle-orm";
-
+import { eq, count, avg, desc } from "drizzle-orm";
 // ── Admin Guard ──────────────────────────────────────────────────────────────
 
 function getAdminUserIds(): string[] {
@@ -51,10 +50,13 @@ export async function GET(req: NextRequest) {
 
     // 2. Admin user ID check
     const adminIds = getAdminUserIds();
-    if (adminIds.length > 0 && !adminIds.includes(userId)) {
+    if (adminIds.length === 0) {
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json({ error: "Forbidden: ADMIN_USER_IDS not configured" }, { status: 403 });
+      }
+    } else if (!adminIds.includes(userId)) {
       return NextResponse.json({ error: "Forbidden: not an admin" }, { status: 403 });
     }
-
     // 3. IP allowlist check
     const allowedIPs = getAllowedIPs();
     if (allowedIPs.length > 0) {
@@ -169,8 +171,8 @@ export async function GET(req: NextRequest) {
     }
 
     for (const iv of completedInterviews) {
-      const fb = iv.feedback as any;
-      const overallScore = fb?.overallScore ?? iv.score ?? null;
+      const fb = iv.feedback as Record<string, unknown> | null;
+      const overallScore = (typeof fb?.overallScore === "number" ? fb.overallScore : null) ?? iv.score ?? null;
 
       if (typeof overallScore === "number") {
         allOverallScores.push(overallScore);
@@ -179,7 +181,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Hiring recommendation
-      const rec = fb?.hiringRecommendation || "unknown";
+      const rec = typeof fb?.hiringRecommendation === "string" ? fb.hiringRecommendation : "unknown";
       hiringRecommendations[rec] = (hiringRecommendations[rec] || 0) + 1;
 
       // Skill confidence breakdown
@@ -195,7 +197,7 @@ export async function GET(req: NextRequest) {
       if (fb?.questionFeedback && Array.isArray(fb.questionFeedback)) {
         totalQuestionsEvaluated += fb.questionFeedback.length;
         for (const qf of fb.questionFeedback) {
-          const quality = qf.answerQuality || "no_answer";
+          const quality = (qf && typeof qf === "object" && "answerQuality" in qf && typeof qf.answerQuality === "string") ? qf.answerQuality : "no_answer";
           answerQualityDist[quality] = (answerQualityDist[quality] || 0) + 1;
         }
       }
@@ -262,7 +264,7 @@ export async function GET(req: NextRequest) {
       score: s.score,
       createdAt: s.createdAt,
       candidateSnapshot: s.candidateSnapshot,
-      candidateName: (s.feedback as any)?.candidateProfile?.fullName || "Candidate",
+      candidateName: (s.feedback as { candidateProfile?: { fullName?: string } } | null)?.candidateProfile?.fullName || "Candidate",
     }));
 
     return NextResponse.json({
@@ -301,10 +303,11 @@ export async function GET(req: NextRequest) {
         " completed AI-evaluated sessions.",
       generatedAt: new Date().toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("[ADMIN_ANALYTICS_ERROR]", error);
     return NextResponse.json(
-      { error: "Failed to fetch analytics", message: error.message },
+      { error: "Failed to fetch analytics", message: errorMessage },
       { status: 500 },
     );
   }

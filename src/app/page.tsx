@@ -27,11 +27,11 @@ export default function Home() {
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center max-w-4xl space-y-6">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-mono tracking-widest text-zinc-300 backdrop-blur-md">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          INTERVIA AUTONOMOUS INTERVIEW PLATFORM
+          PREPAI AUTONOMOUS INTERVIEW PLATFORM
         </div>
 
         <h1 className="text-6xl sm:text-7xl md:text-8xl font-bold tracking-tighter text-white drop-shadow-sm">
-          Intervia
+          PrepAI
         </h1>
 
         <p className="max-w-xl text-base sm:text-lg text-zinc-400 font-normal leading-relaxed">

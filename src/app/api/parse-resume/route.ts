@@ -230,8 +230,10 @@ export async function POST(request: Request) {
       } else {
         cleanText = extractTxt(fileBuffer);
       }
-    } catch (extractErr: any) {
-      const category = extractErr?.category ?? "unreadable";
+    } catch (extractErr: unknown) {
+      const category = (extractErr && typeof extractErr === "object" && "category" in extractErr && typeof extractErr.category === "string")
+        ? extractErr.category
+        : "unreadable";
       let userMessage =
         "Could not read text from this file. Please export your resume as a text-based PDF from Word or Google Docs and try again.";
       if (category === "unsupported") {

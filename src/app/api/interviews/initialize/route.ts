@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
         status: "ongoing",
         currentPhase: "greeting",
         feedback: { candidateProfile },
-        plan: initialState as any,
+        plan: initialState,
       })
       .returning();
 
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
         const stateWithTopics = { ...initialState, coverage: topics };
         await db
           .update(interviews)
-          .set({ plan: stateWithTopics as any })
+          .set({ plan: stateWithTopics })
           .where(eq(interviews.id, createdInterview.id));
         console.log(`[INITIALIZE] Generated ${topics.length} coverage topics (seed=${conversationSeed}) for ${createdInterview.id}`);
       } catch (err) {
@@ -159,17 +159,17 @@ export async function POST(req: NextRequest) {
     });
 
     // Set cookie tracking interview session for resilience across logouts/sessions
-    const existingCookie = req.cookies.get("intervia_interview_ids")?.value ?? "";
+    const existingCookie = req.cookies.get("prepai_interview_ids")?.value ?? req.cookies.get("intervia_interview_ids")?.value ?? "";
     const ids = new Set(existingCookie.split(",").map((s) => s.trim()).filter(Boolean));
     ids.add(createdInterview.id);
 
-    res.cookies.set("intervia_interview_ids", Array.from(ids).join(","), {
+    res.cookies.set("prepai_interview_ids", Array.from(ids).join(","), {
       path: "/",
       maxAge: 60 * 60 * 24 * 365, // 1 year persistence
       sameSite: "lax",
       httpOnly: false,
     });
-    res.cookies.set("intervia_last_interview_id", createdInterview.id, {
+    res.cookies.set("prepai_last_interview_id", createdInterview.id, {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
       sameSite: "lax",

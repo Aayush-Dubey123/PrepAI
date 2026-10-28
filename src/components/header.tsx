@@ -36,7 +36,7 @@ export function Header() {
             </svg>
           </div>
           <span className="font-semibold text-sm sm:text-base text-white tracking-tight">
-            Intervia
+            PrepAI
           </span>
         </Link>
 
@@ -101,7 +101,7 @@ export function Header() {
                   </svg>
                 </div>
                 <h3 className="text-xl font-semibold text-white tracking-tight">
-                  About Intervia
+                  About PrepAI
                 </h3>
               </div>
               <button
@@ -113,7 +113,7 @@ export function Header() {
             </div>
 
             <p className="text-sm text-zinc-300 leading-relaxed">
-              Intervia is a Tier-1 autonomous technical interview platform powered by adaptive AI models.
+              PrepAI is a Tier-1 autonomous technical interview platform powered by adaptive AI models.
               It conducts dynamic code evaluations, real-time voice & text technical dialogue, and instant candidate feedback loops.
             </p>
 

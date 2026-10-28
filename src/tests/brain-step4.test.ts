@@ -11,11 +11,7 @@ import { ConversationStateSchema } from "../schemas/brain";
 import {
   enforceDecisionPolicy,
   isPhraseRepeated,
-  getClarifyUtterance,
-  activateNextTopic,
-  closeActiveTopic,
 } from "../lib/interview/state";
-import { BRAIN_CONFIG } from "../lib/interview/brain-config";
 
 let passed = 0;
 let failed = 0;
@@ -25,8 +21,9 @@ function test(name: string, fn: () => void) {
     fn();
     console.log(`  ✅  ${name}`);
     passed++;
-  } catch (e: any) {
-    console.error(`  ❌  ${name}\n     ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`  ❌  ${name}\n     ${msg}`);
     failed++;
   }
 }

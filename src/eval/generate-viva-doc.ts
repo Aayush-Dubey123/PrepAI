@@ -13,7 +13,7 @@ import {
   calculateCorrelations,
   calculateQWK,
 } from "./metrics";
-import { parseLatencyEvents } from "./collect-latency";
+import { parseLatencyEvents, type TurnLatency } from "./collect-latency";
 import { LatencyEvent } from "./logger";
 
 function parseCsv(content: string): Array<Record<string, string>> {
@@ -79,7 +79,7 @@ export function generateVivaDoc(): void {
   }
 
   // Latency parsing
-  let latencyList: any[] = [];
+  let latencyList: TurnLatency[] = [];
   const latFile = path.join(evalDir, "latency_events.jsonl");
   if (fs.existsSync(latFile)) {
     const lines = fs.readFileSync(latFile, "utf-8").split("\n");
@@ -151,7 +151,7 @@ export function generateVivaDoc(): void {
   const avgSTT = latencyTurns.length > 0 ? latencyTurns.reduce((a, t) => a + (t.L_STT || 0), 0) / latencyTurns.length : null;
   const avgLLM = latencyTurns.length > 0 ? latencyTurns.reduce((a, t) => a + (t.L_LLM || 0), 0) / latencyTurns.length : null;
   const avgTTS = latencyTurns.length > 0 ? latencyTurns.reduce((a, t) => a + (t.L_TTS || 0), 0) / latencyTurns.length : null;
-  const avgTotal = latencyTurns.length > 0 ? latencyTurns.reduce((a, t) => a + t.L_total, 0) / latencyTurns.length : null;
+  const avgTotal = latencyTurns.length > 0 ? latencyTurns.reduce((a, t) => a + (t.L_total || 0), 0) / latencyTurns.length : null;
 
   // 6. AI vs Human Evaluation / MAE / Correlations (Section 7)
   const ratedScoreTurns = turnsData.filter((t) => t.human_score && t.ai_score);
@@ -193,7 +193,7 @@ export function generateVivaDoc(): void {
   const nowStr = new Date().toISOString();
   let doc = `# Viva AI Performance Evaluation and Quantitative Measurement Report
 
-*System: Intervia Autonomous Technical Interviewer*  
+*System: PrepAI Autonomous Technical Interviewer*  
 *Generated on: ${nowStr}*  
 *Data Sources: \`eval-data/turns_*.csv\`, \`eval-data/questions_*.csv\`, \`eval-data/latency_events.jsonl\`*
 
@@ -213,7 +213,7 @@ export function generateVivaDoc(): void {
 ## 1. Overview & Study Scope
 
 ### Overview & Purpose
-This document presents the empirical quantitative evaluation results for **Intervia**, executing the measurement methodology specified in the *Viva AI Performance Evaluation and Quantitative Measurement Guide*. All metrics reported herein are computed directly from real recorded session data and verified human evaluations.
+This document presents the empirical quantitative evaluation results for **PrepAI**, executing the measurement methodology specified in the *Viva AI Performance Evaluation and Quantitative Measurement Guide*. All metrics reported herein are computed directly from real recorded session data and verified human evaluations.
 
 ### Study Scope (Empirical Data Summary)
 - **Distinct Interview Sessions Analyzed:** \`${distinctInterviews}\`
@@ -235,12 +235,12 @@ Where $S$ is substitutions, $D$ is deletions, $I$ is insertions, and $N$ is tota
 `;
 
   if (werResult.value !== null && refFilledRows.length > 0) {
-    const details = werResult.details as any;
+    const details = werResult.details as { substitutions?: number; deletions?: number; insertions?: number; referenceWords?: number } | null;
     doc += `**Overall Mean WER:** \`${(werResult.value * 100).toFixed(2)}%\` (Sample size $n=${werResult.n}$ turns)  
-- **Substitutions ($S$):** ${details.substitutions}
-- **Deletions ($D$):** ${details.deletions}
-- **Insertions ($I$):** ${details.insertions}
-- **Reference Words ($N$):** ${details.referenceWords}
+- **Substitutions ($S$):** ${details?.substitutions ?? 0}
+- **Deletions ($D$):** ${details?.deletions ?? 0}
+- **Insertions ($I$):** ${details?.insertions ?? 0}
+- **Reference Words ($N$):** ${details?.referenceWords ?? 0}
 
 | Session & Turn ID | Reference Transcript | AI Transcript (STT Output) | Per-Row WER % |
 |:---|:---|:---|:---|

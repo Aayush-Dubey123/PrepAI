@@ -107,7 +107,7 @@ export async function POST(
       return NextResponse.json({ error: "Interview already ended", code: "ALREADY_ENDED" }, { status: 409 });
     }
 
-    let state: ConversationState = loadState(interview.plan);
+    const state: ConversationState = loadState(interview.plan);
 
     logEvalLatency({
       interviewId,
@@ -240,7 +240,7 @@ export async function POST(
     let llmResponse = null;
     let provider = "fallback";
     let llmLatencyMs = 0;
-    let attemptsList: any[] = [];
+    let attemptsList: unknown[] = [];
 
     try {
       const llmStart = Date.now();
@@ -268,18 +268,19 @@ export async function POST(
       } else {
         console.warn("[TURN] LLM response schema invalid:", parsed.error, "Raw:", result.text.slice(0, 200));
       }
-    } catch (llmErr: any) {
-      console.error("[TURN] All LLM providers failed:", llmErr?.message);
+    } catch (llmErr: unknown) {
+      const message = llmErr instanceof Error ? llmErr.message : "Unknown error";
+      console.error("[TURN] All LLM providers failed:", message);
     }
 
     // ── 9. Enforce decision policy ────────────────────────────────────────────
     let finalSay: string;
     let finalAction: string;
-    let finalIntent = llmResponse?.intent ?? "garbled";
+    const finalIntent = llmResponse?.intent ?? "garbled";
     let shouldAdvanceTopic = false;
     let shouldEndInterview = false;
-    let evalSnapshot = llmResponse?.evaluation;
-    let decisionSnapshot = llmResponse?.decision;
+    const evalSnapshot = llmResponse?.evaluation;
+    const decisionSnapshot = llmResponse?.decision;
 
     if (llmResponse) {
       const enforced = enforceDecisionPolicy(llmResponse, currentState);
@@ -516,8 +517,8 @@ export async function POST(
   }
 }
 
-function mapPhaseToEnum(phase: ConversationState["phase"]): string {
-  const map: Record<ConversationState["phase"], string> = {
+function mapPhaseToEnum(phase: ConversationState["phase"]): "greeting" | "rapport" | "technical" | "wrapup" | "closed" {
+  const map: Record<ConversationState["phase"], "greeting" | "rapport" | "technical" | "wrapup" | "closed"> = {
     intro: "greeting",
     warmup: "rapport",
     core: "technical",

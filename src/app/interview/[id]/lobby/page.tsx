@@ -2,9 +2,19 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Mic, MicOff, Volume2, VolumeX, CheckCircle, XCircle, ArrowRight, ArrowLeft, Camera, CameraOff, ShieldCheck, Eye, RefreshCw } from "lucide-react";
+import { Mic, MicOff, Volume2, CheckCircle, XCircle, ArrowRight, ArrowLeft, Camera, CameraOff, ShieldCheck, Eye, RefreshCw } from "lucide-react";
 import { IntegrityDetector } from "@/src/lib/integrity/detector";
-
+interface ISpeechRecognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: () => void;
+  onresult: (event: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }> }) => void;
+  onerror: (event: { error: string }) => void;
+  onend: () => void;
+  start: () => void;
+  stop: () => void;
+}
 export default function InterviewLobbyPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -27,14 +37,24 @@ export default function InterviewLobbyPage() {
   // Integrity Monitoring & Calibration State
   const [integrityConsent, setIntegrityConsent] = useState(true);
   const [isCalibrating, setIsCalibrating] = useState(false);
-  const [isCalibrated, setIsCalibrated] = useState(false);
+  const [isCalibrated, setIsCalibrated] = useState(() => {
+    if (typeof window === "undefined" || !interviewId) return false;
+    try {
+      const stored = localStorage.getItem(`integrity_calibration_${interviewId}`);
+      if (!stored) return false;
+      const parsed = JSON.parse(stored);
+      return parsed.baselineYaw !== undefined && parsed.baselinePitch !== undefined;
+    } catch {
+      return false;
+    }
+  });
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationFeedback, setCalibrationFeedback] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const microphoneRef = useRef<MediaStream | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const detectorRef = useRef<IntegrityDetector | null>(null);
@@ -43,11 +63,10 @@ export default function InterviewLobbyPage() {
     // Validate interview ID on mount
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!interviewId || !uuidRegex.test(interviewId)) {
-      console.error("[LOBBY] Invalid interview ID:", interviewId);
-      setError("Invalid interview ID. Redirecting to home...");
       setTimeout(() => {
+        setError("Invalid interview ID. Redirecting to home...");
         router.push("/");
-      }, 2000);
+      }, 0);
       return;
     }
 
@@ -83,17 +102,6 @@ export default function InterviewLobbyPage() {
     };
 
     validateInterview();
-
-    // Check if calibration baseline was previously stored for this interview
-    const storedCal = localStorage.getItem(`integrity_calibration_${interviewId}`);
-    if (storedCal) {
-      try {
-        const parsed = JSON.parse(storedCal);
-        if (parsed.baselineYaw !== undefined && parsed.baselinePitch !== undefined) {
-          setIsCalibrated(true);
-        }
-      } catch (e) {}
-    }
 
     // Initialize audio context on mount
     if (typeof window !== "undefined" && window.AudioContext) {
@@ -241,9 +249,10 @@ export default function InterviewLobbyPage() {
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as unknown as { SpeechRecognition?: new () => ISpeechRecognition; webkitSpeechRecognition?: new () => ISpeechRecognition };
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
     const recognition = new SpeechRecognition();
-
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
@@ -254,23 +263,22 @@ export default function InterviewLobbyPage() {
       setError(null);
     };
 
-    recognition.onresult = (event: any) => {
-      const interim = Array.from(event.results)
-        .map((result: any) => result[0])
-        .map((result: any) => result.transcript)
+    recognition.onresult = (event: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }> }) => {
+      const resultsArray = Array.from(event.results);
+      const interim = resultsArray
+        .map((result) => result[0]?.transcript || "")
         .join("");
 
       setTranscript(interim);
 
-      const finalResult = event.results[event.results.length - 1];
-      if (finalResult.isFinal) {
+      const finalResult = resultsArray[resultsArray.length - 1];
+      if (finalResult?.isFinal) {
         setSttTested(true);
         setIsListening(false);
       }
     };
 
-    recognition.onerror = (event: any) => {
-      console.error("STT error:", event.error);
+    recognition.onerror = (event: { error: string }) => {
       setIsListening(false);
       if (event.error === "not-allowed") {
         setError("Microphone access denied");
@@ -362,12 +370,12 @@ export default function InterviewLobbyPage() {
       setCalibrationFeedback(null);
       localStorage.setItem(`integrity_calibration_${interviewId}`, JSON.stringify(calData));
       console.log("[LOBBY] Alignment baseline calibration stored:", calData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn("[LOBBY] Alignment calibration failed:", err);
       setIsCalibrated(false);
       setIsCalibrating(false);
       setCalibrationProgress(0);
-      const feedbackMsg = err?.message || "Move to center & look at camera";
+      const feedbackMsg = err instanceof Error ? err.message : "Move to center & look at camera";
       setCalibrationFeedback(feedbackMsg);
     }
   };
@@ -635,7 +643,7 @@ export default function InterviewLobbyPage() {
                 />
                 <label htmlFor="researchConsent" className="text-[11px] text-purple-200 cursor-pointer">
                   <span className="font-bold text-white block">🔬 Research Mode Opt-In Required</span>
-                  Research mode: this test session's audio will be temporarily recorded locally for transcription accuracy testing only, and deleted after the session.
+                  Research mode: this test session&apos;s audio will be temporarily recorded locally for transcription accuracy testing only, and deleted after the session.
                 </label>
               </div>
             </div>

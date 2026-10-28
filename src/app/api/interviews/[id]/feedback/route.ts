@@ -10,8 +10,7 @@ import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks } from "@/src/db/schema";
-import { loadState } from "@/src/lib/interview/state";
-
+import { generateFeedbackForInterviewRecord } from "./generate/route";
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -36,8 +35,8 @@ export async function GET(
     }
 
     // If feedback is already generated and valid, return it directly
-    const feedbackObj = interview.feedback as any;
-    if (feedbackObj && feedbackObj.overallScore !== undefined) {
+    const feedbackObj = interview.feedback as Record<string, unknown> | null;
+    if (feedbackObj && typeof feedbackObj.overallScore === "number") {
       return NextResponse.json({
         success: true,
         interview: {
@@ -82,30 +81,24 @@ export async function GET(
       });
     }
 
-    // Call generate endpoint internally or redirect
-    const url = new URL(req.url);
-    const generateUrl = `${url.origin}/api/interviews/${interviewId}/feedback/generate`;
-    const genRes = await fetch(generateUrl, {
-      method: "POST",
-      headers: {
-        cookie: req.headers.get("cookie") || "",
-      },
-    });
+    const generatedFeedback = await generateFeedbackForInterviewRecord(
+      interview,
+      chunks,
+      req,
+      { userId: userId ?? undefined, sessionId: null },
+    );
 
-    if (genRes.ok) {
-      const generatedFeedback = await genRes.json();
-      return NextResponse.json({
-        success: true,
-        interview: {
-          id: interview.id,
-          jobRole: interview.jobRole,
-          status: "completed",
-          createdAt: interview.createdAt,
-          score: generatedFeedback.overallScore,
-        },
-        feedback: generatedFeedback,
-      });
-    }
+    return NextResponse.json({
+      success: true,
+      interview: {
+        id: interview.id,
+        jobRole: interview.jobRole,
+        status: "completed",
+        createdAt: interview.createdAt,
+        score: generatedFeedback.overallScore,
+      },
+      feedback: generatedFeedback,
+    });
 
     // Fallback if generate endpoint fails
     return NextResponse.json({
@@ -129,10 +122,11 @@ export async function GET(
         interviewDuration: 0,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("[FEEDBACK_GET_ERROR]", error);
     return NextResponse.json(
-      { error: "Failed to retrieve feedback report", message: error.message },
+      { error: "Failed to retrieve feedback report", message: errorMessage },
       { status: 500 },
     );
   }

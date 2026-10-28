@@ -8,12 +8,12 @@ export interface LogEventOptions {
   sessionId?: string | null;
   interviewId?: string | null;
   type: string;
-  meta?: Record<string, any> | null;
+  meta?: Record<string, unknown> | null;
 }
 
 export function hashIp(ip: string): string {
   if (!ip) return "";
-  const salt = process.env.LOG_SALT || "intervia-audit-default-salt";
+  const salt = process.env.LOG_SALT || "prepai-audit-default-salt";
   return crypto.createHmac("sha256", salt).update(ip).digest("hex");
 }
 

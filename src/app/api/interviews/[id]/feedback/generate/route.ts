@@ -21,12 +21,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks } from "@/src/db/schema";
-import { FeedbackReportSchema } from "@/src/schemas/feedback";
+import { FeedbackReportSchema, type FeedbackReport } from "@/src/schemas/feedback";
 import { generate, tryParseAndValidate } from "@/src/lib/llm/index";
 import { loadState } from "@/src/lib/interview/state";
 import { logEvent } from "@/src/lib/audit";
-import type { ConversationState, TurnScore, CoverageTopic } from "@/src/schemas/brain";
-
+import type { ConversationState } from "@/src/schemas/brain";
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_INSTRUCTION = `You are a senior hiring manager and technical interviewer writing the post-interview report for a
@@ -147,86 +146,12 @@ export async function POST(
         { status: 400 },
       );
     }
-
-    // ── Load ConversationState for grounded signals ────────────────────────
-    const state: ConversationState = loadState(interview.plan);
-    const signalsBlock = buildSignalsBlock(state, interview);
-    const transcriptText = chunks
-      .map((c) => `[${c.speaker.toUpperCase()}]: ${c.content}`)
-      .join("\n");
-
-    const interviewContext =
-      `=== INTERVIEW METADATA ===\n` +
-      `Role: ${interview.jobRole}\n` +
-      `Duration: ~${Math.round((Date.now() - new Date(interview.createdAt!).getTime()) / 60000)} min\n\n` +
-      `=== PER-TURN EVALUATION SIGNALS ===\n${signalsBlock}\n\n` +
-      `=== FULL TRANSCRIPT ===\n${transcriptText}`;
-
-    let validatedFeedback: any;
-
-    // Pre-computed exact numbers (code is source of truth)
-    const userChunks = chunks.filter((c) => c.speaker === "user");
-    const metrics = calculateInterviewMetrics(state, userChunks.length);
-    const computedScore = metrics.overallScore;
-    const computedRecommendation = metrics.hiringRecommendation;
-
-    try {
-      const result = await generate({
-        task: "heavy",
-        system: SYSTEM_INSTRUCTION,
-        prompt: `${interviewContext}\n\nREQUIRED COMPUTED NUMBERS (Echo these exactly):\noverallScore: ${computedScore}\nhiringRecommendation: "${computedRecommendation}"\n\nGenerate a feedback report using EXACTLY this JSON shape:\n${JSON_SHAPE}`,
-        jsonSchema: FeedbackReportSchema,
-      });
-
-      const parsed = tryParseAndValidate(result.text, FeedbackReportSchema);
-      if (!parsed.ok) throw new Error(`Schema validation failed: ${parsed.error}`);
-      validatedFeedback = parsed.data;
-
-      // Force code-computed numbers (code is source of truth)
-      validatedFeedback.overallScore = computedScore;
-      validatedFeedback.hiringRecommendation = computedRecommendation;
-
-      console.log(
-        `[FEEDBACK] provider=${result.provider} model=${result.model} latency=${result.latencyMs}ms ` +
-        `score=${computedScore} rec=${computedRecommendation} scores=${state.scores.length} topics=${state.coverage.length}`,
-      );
-    } catch (llmErr: any) {
-      console.error("[FEEDBACK] LLM failed, using grounded fallback:", llmErr?.message);
-      validatedFeedback = buildGroundedFallback(state, interview, chunks);
-    }
-
-    // Store feedback + integrity events (preserve existing integrityEvents if present)
-    const existingFeedback = (interview.feedback as Record<string, unknown> | null) ?? {};
-    const mergedFeedback = {
-      ...existingFeedback,
-      ...validatedFeedback,
-      // Preserve integrity data
-      integrityEvents: existingFeedback.integrityEvents,
-      integrityStrikes: existingFeedback.integrityStrikes,
-      integrityStatus: existingFeedback.integrityStatus,
-      // Preserve candidate profile
-      candidateProfile: existingFeedback.candidateProfile,
-    };
-
-    await db
-      .update(interviews)
-      .set({
-        feedback: mergedFeedback,
-        score: validatedFeedback.overallScore,
-        status: "completed",
-      })
-      .where(eq(interviews.id, interviewId));
-
-    logEvent(req, {
-      userId,
-      sessionId,
-      interviewId,
-      type: "feedback",
-      meta: {
-        score: validatedFeedback.overallScore,
-        recommendation: validatedFeedback.hiringRecommendation,
-      },
-    });
+    const validatedFeedback = await generateFeedbackForInterviewRecord(
+      interview,
+      chunks,
+      req,
+      { userId, sessionId },
+    );
 
     return NextResponse.json(validatedFeedback);
   } catch (error) {
@@ -244,6 +169,99 @@ export async function POST(
       { status: 500 },
     );
   }
+}
+
+export async function generateFeedbackForInterviewRecord(
+  interview: typeof interviews.$inferSelect,
+  chunks: Array<typeof transcriptChunks.$inferSelect>,
+  req?: Request,
+  authInfo?: { userId?: string; sessionId?: string | null },
+): Promise<FeedbackReport> {
+  const interviewId = interview.id;
+  // ── Load ConversationState for grounded signals ────────────────────────
+  const state: ConversationState = loadState(interview.plan);
+  const signalsBlock = buildSignalsBlock(state);
+  const transcriptText = chunks
+    .map((c) => `[${c.speaker.toUpperCase()}]: ${c.content}`)
+    .join("\n");
+
+  const interviewContext =
+    `=== INTERVIEW METADATA ===\n` +
+    `Role: ${interview.jobRole}\n` +
+    `Duration: ~${Math.round((Date.now() - new Date(interview.createdAt!).getTime()) / 60000)} min\n\n` +
+    `=== PER-TURN EVALUATION SIGNALS ===\n${signalsBlock}\n\n` +
+    `=== FULL TRANSCRIPT ===\n${transcriptText}`;
+
+  let validatedFeedback: FeedbackReport;
+
+  // Pre-computed exact numbers (code is source of truth)
+  const userChunks = chunks.filter((c) => c.speaker === "user");
+  const metrics = calculateInterviewMetrics(state, userChunks.length);
+  const computedScore = metrics.overallScore;
+  const computedRecommendation = metrics.hiringRecommendation;
+
+  try {
+    const result = await generate({
+      task: "heavy",
+      system: SYSTEM_INSTRUCTION,
+      prompt: `${interviewContext}\n\nREQUIRED COMPUTED NUMBERS (Echo these exactly):\noverallScore: ${computedScore}\nhiringRecommendation: "${computedRecommendation}"\n\nGenerate a feedback report using EXACTLY this JSON shape:\n${JSON_SHAPE}`,
+      jsonSchema: FeedbackReportSchema,
+    });
+
+    const parsed = tryParseAndValidate(result.text, FeedbackReportSchema);
+    if (!parsed.ok) throw new Error(`Schema validation failed: ${parsed.error}`);
+    validatedFeedback = parsed.data;
+
+    // Force code-computed numbers (code is source of truth)
+    validatedFeedback.overallScore = computedScore;
+    validatedFeedback.hiringRecommendation = computedRecommendation;
+
+    console.log(
+      `[FEEDBACK] provider=${result.provider} model=${result.model} latency=${result.latencyMs}ms ` +
+      `score=${computedScore} rec=${computedRecommendation} scores=${state.scores.length} topics=${state.coverage.length}`,
+    );
+  } catch (llmErr: unknown) {
+    const errMessage = llmErr instanceof Error ? llmErr.message : "Unknown LLM error";
+    console.error("[FEEDBACK] LLM failed, using grounded fallback:", errMessage);
+    validatedFeedback = buildGroundedFallback(state, interview, chunks);
+  }
+
+  // Store feedback + integrity events (preserve existing integrityEvents if present)
+  const existingFeedback = (interview.feedback as Record<string, unknown> | null) ?? {};
+  const mergedFeedback = {
+    ...existingFeedback,
+    ...validatedFeedback,
+    // Preserve integrity data
+    integrityEvents: existingFeedback.integrityEvents,
+    integrityStrikes: existingFeedback.integrityStrikes,
+    integrityStatus: existingFeedback.integrityStatus,
+    // Preserve candidate profile
+    candidateProfile: existingFeedback.candidateProfile,
+  };
+
+  await db
+    .update(interviews)
+    .set({
+      feedback: mergedFeedback,
+      score: validatedFeedback.overallScore,
+      status: "completed",
+    })
+    .where(eq(interviews.id, interviewId));
+
+  if (req && authInfo?.userId) {
+    logEvent(req, {
+      userId: authInfo.userId,
+      sessionId: authInfo.sessionId,
+      interviewId,
+      type: "feedback",
+      meta: {
+        score: validatedFeedback.overallScore,
+        recommendation: validatedFeedback.hiringRecommendation,
+      },
+    });
+  }
+
+  return validatedFeedback;
 }
 
 // ─── Signals block builder & Metrics Calculator ───────────────────────────────
@@ -289,7 +307,7 @@ function calculateInterviewMetrics(state: ConversationState, userChunksCount: nu
   };
 }
 
-function buildSignalsBlock(state: ConversationState, interview: any): string {
+function buildSignalsBlock(state: ConversationState): string {
   const lines: string[] = [];
 
   if (state.scores.length === 0) {
@@ -339,7 +357,7 @@ function buildSignalsBlock(state: ConversationState, interview: any): string {
 
 // ─── Grounded fallback (when LLM is unavailable) ─────────────────────────────
 
-function buildGroundedFallback(state: ConversationState, interview: any, chunks: any[]) {
+function buildGroundedFallback(state: ConversationState, interview: typeof interviews.$inferSelect, chunks: Array<typeof transcriptChunks.$inferSelect>): FeedbackReport {
   const userChunks = chunks.filter((c) => c.speaker === "user");
   const metrics = calculateInterviewMetrics(state, userChunks.length);
   const scoredTopics = state.coverage.filter((t) => t.status === "done" && t.score !== undefined);

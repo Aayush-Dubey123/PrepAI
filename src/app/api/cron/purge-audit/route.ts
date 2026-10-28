@@ -14,15 +14,17 @@ export async function GET(req: NextRequest) {
 async function handlePurge(req: NextRequest) {
   try {
     const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get("x-cron-secret") || req.headers.get("authorization");
+    if (!cronSecret) {
+      return NextResponse.json({ error: "CRON_SECRET is not configured on the server" }, { status: 500 });
+    }
 
-    if (cronSecret) {
-      const isAuthorized =
-        authHeader === cronSecret ||
-        authHeader === `Bearer ${cronSecret}`;
-      if (!isAuthorized) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+    const authHeader = req.headers.get("x-cron-secret") || req.headers.get("authorization");
+    const isAuthorized =
+      authHeader === cronSecret ||
+      authHeader === `Bearer ${cronSecret}`;
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const NinetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);

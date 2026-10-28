@@ -55,10 +55,11 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true, message: "Snapshot saved successfully" });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const details = error instanceof Error ? error.message : "Unknown error";
     console.error("[SNAPSHOT_ERROR]", error);
     return NextResponse.json(
-      { error: "Failed to save candidate snapshot", details: error.message },
+      { error: "Failed to save candidate snapshot", details },
       { status: 500 }
     );
   }

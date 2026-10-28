@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { IntegrityDetector } from "@/src/lib/integrity/detector";
 import { INTEGRITY_CONFIG } from "@/src/lib/integrity/config";
 import type { IntegrityEvent } from "@/src/schemas/integrity";
-import { MOCK_STRUCTURED_RESUME } from "@/src/lib/default-interview-plan";
 import LatticeLoader from "@/src/components/ui/LatticeLoader";
 
 type TurnState = "idle" | "ai_speaking" | "user_turn" | "processing";
@@ -79,14 +78,6 @@ const PHASE_LABELS: Record<string, string> = {
   closed: "Complete",
 };
 
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-};
-
-const AI_SPEAKING_MS = 3000;
-
 function mapChunkToEntry(chunk: TranscriptChunkRecord): TranscriptEntry {
   return {
     id: chunk.id,
@@ -96,16 +87,6 @@ function mapChunkToEntry(chunk: TranscriptChunkRecord): TranscriptEntry {
   };
 }
 
-function getPhaseLabel(phase: string): string {
-  const labels: Record<string, string> = {
-    greeting: "Getting Started",
-    rapport: "Getting to Know You",
-    technical: "Technical Round",
-    wrapup: "Wrapping Up",
-    closed: "Complete",
-  };
-  return labels[phase] || phase;
-}
 
 export default function InterviewRoomPage() {
   const params = useParams<{ id: string }>();
@@ -117,24 +98,22 @@ export default function InterviewRoomPage() {
   const [userInput, setUserInput] = useState("");
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
-  const [feedback, setFeedback] = useState<any>(null);
-  const [showFeedback, setShowFeedback] = useState(false);
-
-  // Speech recognition state
-  const [supportsSpeechRecognition, setSupportsSpeechRecognition] = useState(false);
+  const [supportsSpeechRecognition] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+    return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
+  });
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
-  const [useFallbackInput, setUseFallbackInput] = useState(false);
 
   // Interview brain state (server-owned: phase, turns)
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [aiProvider, setAiProvider] = useState<string>("gemini");
   const [ttsProvider, setTtsProvider] = useState<"browser" | "sarvam">("sarvam");
   const [currentPhase, setCurrentPhase] = useState<string>("intro");
-  const [candidateProfile, setCandidateProfile] = useState<any>(null);
+  const [, setCandidateProfile] = useState<unknown>(null);
 
-  const recognitionRef = useRef<any>(null);
-  const synthesisRef = useRef<SpeechSynthesis | null>(null);
+  const recognitionRef = useRef<unknown>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showTranscriptPanel, setShowTranscriptPanel] = useState(true);
   const [showEndModal, setShowEndModal] = useState(false);
@@ -146,9 +125,6 @@ export default function InterviewRoomPage() {
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [showSilenceHint, setShowSilenceHint] = useState(false);
   const [jobRole, setJobRole] = useState("Software Developer");
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [ragQuery, setRagQuery] = useState("");
-  const [isQueryingRag, setIsQueryingRag] = useState(false);
 
   // Integrity monitoring state
   const [integrityStrikes, setIntegrityStrikes] = useState(0);
@@ -159,8 +135,10 @@ export default function InterviewRoomPage() {
   const integrityDetectorRef = useRef<IntegrityDetector | null>(null);
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
   const isAttemptingOrchestratorRef = useRef(false);
+  const isEndingRef = useRef(false);
+  const startListeningRef = useRef<() => void>(() => {});
+  const stopListeningRef = useRef<() => void>(() => {});
 
   // Elapsed timer effect
   useEffect(() => {
@@ -189,13 +167,14 @@ export default function InterviewRoomPage() {
         acquiredStream = stream;
         setMediaStream(stream);
         // srcObject is set in the dedicated effect below
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isMounted) return;
         console.warn("[WEBCAM] getUserMedia error:", err);
+        const errorObj = err as { name?: string };
         let msg = "Camera access denied";
-        if (err?.name === "NotAllowedError") msg = "Camera permission denied. Click the camera icon in your browser's address bar to allow access.";
-        else if (err?.name === "NotFoundError") msg = "No camera found. Please connect a camera and refresh.";
-        else if (err?.name === "NotReadableError") msg = "Camera is in use by another application. Please close it and try again.";
+        if (errorObj?.name === "NotAllowedError") msg = "Camera permission denied. Click the camera icon in your browser's address bar to allow access.";
+        else if (errorObj?.name === "NotFoundError") msg = "No camera found. Please connect a camera and refresh.";
+        else if (errorObj?.name === "NotReadableError") msg = "Camera is in use by another application. Please close it and try again.";
         setCameraError(msg);
         setIsCameraOn(false);
       }
@@ -210,7 +189,6 @@ export default function InterviewRoomPage() {
       }
     };
     // Only run once on mount — not when isCameraOn toggles
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Camera: attach srcObject AFTER the video element mounts ─────────────────
@@ -255,6 +233,70 @@ export default function InterviewRoomPage() {
       }
     }
   }, [mediaStream, captureCandidateSnapshot]);
+
+  // Stop all active AI speech immediately (Barge-in / Interruption)
+  const stopAiSpeech = useCallback(() => {
+    if (activeAudioRef.current) {
+      try {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.currentTime = 0;
+      } catch {}
+      activeAudioRef.current = null;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+  }, []);
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        (recognitionRef.current as { stop: () => void }).stop();
+      } catch {}
+      setIsListening(false);
+    }
+  }, []);
+
+  const endInterviewSession = useCallback(async (reason: "manual" | "natural" | "integrity" | "cap_reached") => {
+    if (isEndingRef.current) return;
+    isEndingRef.current = true;
+    console.log(`[END_SESSION] Terminating interview session (${reason}) for ${interviewId}`);
+
+    stopAiSpeech();
+    stopListening();
+
+    if (integrityDetectorRef.current) {
+      try {
+        integrityDetectorRef.current.stop();
+      } catch {}
+    }
+
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((t) => t.stop());
+      setMediaStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setIsGeneratingFeedback(true);
+    setTurnState("idle");
+    setCurrentPhase("closed");
+
+    try {
+      fetch(`/api/interviews/${interviewId}/feedback/generate`, {
+        method: "POST",
+      }).catch((e) => console.warn("[END_SESSION] Feedback trigger error (non-critical):", e));
+    } catch {}
+
+    router.push(`/interview/${interviewId}/feedback`);
+  }, [interviewId, mediaStream, stopAiSpeech, stopListening, router]);
+
+  const generateFeedback = useCallback(async () => {
+    await endInterviewSession("natural");
+  }, [endInterviewSession]);
 
   // ── Integrity Monitoring: Start detector ────────────────────────────────────
   useEffect(() => {
@@ -347,7 +389,7 @@ export default function InterviewRoomPage() {
         if (calStr) {
           try {
             detector.setBaseline(JSON.parse(calStr));
-          } catch (e) { }
+          } catch {}
         }
         detector.start(videoRef.current);
         integrityDetectorRef.current = detector;
@@ -360,7 +402,7 @@ export default function InterviewRoomPage() {
       detector?.stop();
       detector?.close();
     };
-  }, [interviewId, mediaStream, router]);
+  }, [interviewId, mediaStream, router, endInterviewSession]);
 
   useEffect(() => {
     integrityDetectorRef.current?.setAiSpeaking(turnState === "ai_speaking");
@@ -395,8 +437,6 @@ export default function InterviewRoomPage() {
   // Keyboard shortcut for mic (M key) — uses refs to avoid hoisting issue
   const isListeningRef = useRef(false);
   const turnStateRef = useRef<TurnState>("idle");
-  const startListeningRef = useRef<() => void>(() => { });
-  const stopListeningRef = useRef<() => void>(() => { });
 
   useEffect(() => {
     isListeningRef.current = isListening;
@@ -443,35 +483,15 @@ export default function InterviewRoomPage() {
     }).catch(() => { });
   }, [interviewId, transcript.length]);
 
-  // Stop all active AI speech immediately (Barge-in / Interruption)
-  const stopAiSpeech = useCallback(() => {
-    if (activeAudioRef.current) {
-      try {
-        activeAudioRef.current.pause();
-        activeAudioRef.current.currentTime = 0;
-      } catch (e) { }
-      activeAudioRef.current = null;
-    }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch (e) { }
-    }
-  }, []);
-
   // Silence detection effect for candidate turn
   useEffect(() => {
-    if (turnState === "user_turn") {
-      setShowSilenceHint(false);
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
+    if (turnState === "user_turn") {
       silenceTimerRef.current = setTimeout(() => {
         console.log("[SILENCE DETECT] Candidate silent for > 12s, showing nudge hint");
         setShowSilenceHint(true);
       }, 12000);
-    } else {
-      setShowSilenceHint(false);
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     }
 
     return () => {
@@ -512,47 +532,8 @@ export default function InterviewRoomPage() {
     [interviewId],
   );
 
-  const speakAiQuestion = useCallback(
-    async (questionText: string) => {
-      console.log("[SPEAK AI] Question text:", questionText);
-      if (!questionText || questionText.trim().length === 0) {
-        console.error("[SPEAK AI] Empty question text provided");
-        throw new Error("Cannot speak empty question");
-      }
 
-      setTurnState("ai_speaking");
-      let textAppended = false;
-
-      const triggerTextDisplay = async () => {
-        if (!textAppended) {
-          textAppended = true;
-          setIsAiThinking(false);
-          await appendTranscript(questionText, "ai");
-        }
-      };
-
-      // Try Sarvam TTS first if enabled
-      if (ttsProvider === "sarvam") {
-        try {
-          await speakWithSarvam(questionText, triggerTextDisplay);
-          await triggerTextDisplay();
-          setTurnState("user_turn");
-          return;
-        } catch (error) {
-          console.warn("[SPEAK AI] Sarvam TTS failed, falling back to browser TTS:", error);
-          setTtsProvider("browser");
-        }
-      }
-
-      // Fallback to browser TTS
-      await speakWithBrowserTTS(questionText, triggerTextDisplay);
-      await triggerTextDisplay();
-      setTurnState("user_turn");
-    },
-    [ttsProvider, appendTranscript],
-  );
-
-  const speakWithSarvam = async (text: string, onAudioStart?: () => void) => {
+  const speakWithSarvam = useCallback(async (text: string, onAudioStart?: () => void) => {
     const response = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -605,9 +586,9 @@ export default function InterviewRoomPage() {
       });
       chunkIdx++;
     }
-  };
+  }, [sendClientLatencyLog]);
 
-  const speakWithBrowserTTS = async (text: string, onAudioStart?: () => void) => {
+  const speakWithBrowserTTS = useCallback(async (text: string, onAudioStart?: () => void) => {
     // Use real TTS if available
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
@@ -650,13 +631,52 @@ export default function InterviewRoomPage() {
           if (onAudioStart) onAudioStart();
         };
         utterance.onend = () => resolve();
-        utterance.onerror = (e) => reject(new Error("Browser TTS failed"));
+        utterance.onerror = () => reject(new Error("Browser TTS failed"));
         window.speechSynthesis.speak(utterance);
       });
     } else {
       throw new Error("Browser TTS not supported");
     }
-  };
+  }, []);
+  const speakAiQuestion = useCallback(
+    async (questionText: string) => {
+      console.log("[SPEAK AI] Question text:", questionText);
+      if (!questionText || questionText.trim().length === 0) {
+        console.error("[SPEAK AI] Empty question text provided");
+        throw new Error("Cannot speak empty question");
+      }
+
+      setTurnState("ai_speaking");
+      let textAppended = false;
+
+      const triggerTextDisplay = async () => {
+        if (!textAppended) {
+          textAppended = true;
+          setIsAiThinking(false);
+          await appendTranscript(questionText, "ai");
+        }
+      };
+
+      // Try Sarvam TTS first if enabled
+      if (ttsProvider === "sarvam") {
+        try {
+          await speakWithSarvam(questionText, triggerTextDisplay);
+          await triggerTextDisplay();
+          setTurnState("user_turn");
+          return;
+        } catch (error) {
+          console.warn("[SPEAK AI] Sarvam TTS failed, falling back to browser TTS:", error);
+          setTtsProvider("browser");
+        }
+      }
+
+      // Fallback to browser TTS
+      await speakWithBrowserTTS(questionText, triggerTextDisplay);
+      await triggerTextDisplay();
+      setTurnState("user_turn");
+    },
+    [ttsProvider, appendTranscript, speakWithSarvam, speakWithBrowserTTS],
+  );
 
   /**
    * callTurn: post the user's latest utterance + last-N transcript to /api/interviews/[id]/turn.
@@ -748,18 +768,12 @@ export default function InterviewRoomPage() {
     } finally {
       isAttemptingOrchestratorRef.current = false;
     }
-  }, [interviewId, speakAiQuestion]);
+  }, [interviewId, speakAiQuestion, generateFeedback]);
 
   // Check for speech recognition support on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      setSupportsSpeechRecognition(!!SpeechRecognition);
-
-      // Load voices for TTS
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.getVoices();
-      }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
     }
   }, []);
 
@@ -772,11 +786,11 @@ export default function InterviewRoomPage() {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(interviewId)) {
       console.error("[LOAD SESSION] Invalid interview ID format:", interviewId);
-      setTranscriptError("Invalid interview ID. Please start a new interview from the home page.");
-      setTurnState("idle");
       setTimeout(() => {
+        setTranscriptError("Invalid interview ID. Please start a new interview from the home page.");
+        setTurnState("idle");
         router.push("/");
-      }, 3000);
+      }, 0);
       return;
     }
 
@@ -817,7 +831,7 @@ export default function InterviewRoomPage() {
         console.log("[LOAD SESSION] Loaded interview:", interview.id, "Phase:", interview.currentPhase);
 
         setJobRole(interview?.jobRole ?? "Software Developer");
-        setCurrentPhase((interview?.currentPhase as any) || "greeting");
+        setCurrentPhase(interview?.currentPhase || "intro");
         setCandidateProfile(interview?.feedback?.candidateProfile || null);
 
         const entries = chunks.map(mapChunkToEntry);
@@ -880,7 +894,7 @@ export default function InterviewRoomPage() {
     return () => {
       cancelled = true;
     };
-  }, [interviewId, router, callTurn, speakAiQuestion, ttsProvider]);
+  }, [interviewId, router, callTurn, speakAiQuestion, speakWithSarvam, speakWithBrowserTTS, ttsProvider]);
 
   // NOTE: callTurn is now called DIRECTLY from handleSpeak with explicit args.
   // No effects fire the AI turn — this eliminates the stale-closure and re-greeting bugs.
@@ -889,20 +903,56 @@ export default function InterviewRoomPage() {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcript]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory, isQueryingRag]);
 
-  const startListening = () => {
+  const handleSpeak = useCallback(async (text?: string) => {
+    const finalText = (text || userInput).trim();
+    if (!finalText || turnState !== "user_turn") return;
+
+    sendClientLatencyLog("candidate_speech_end");
+
+    setUserInput("");
+    setInterimTranscript("");
+    setTranscriptError(null);
+    setTurnState("processing");
+
+    try {
+      // 1. Persist user utterance and get the updated entry back
+      const newEntry = await appendTranscript(finalText, "user");
+      // 2. Build updated transcript array with the NEW entry included
+      const updatedTranscript = [...transcript, newEntry];
+      // 3. Call /turn with the user's utterance + fresh transcript — no stale state
+      await callTurn(finalText, updatedTranscript);
+    } catch (error) {
+      setTranscriptError(
+        error instanceof Error
+          ? `Failed to send your response: ${error.message}. Please try again or use text input.`
+          : "Failed to send your response. Please try again or use text input.",
+      );
+      setTurnState("user_turn");
+    }
+  }, [userInput, turnState, sendClientLatencyLog, appendTranscript, transcript, callTurn]);
+
+  const startListening = useCallback(() => {
     if (!supportsSpeechRecognition || isListening) return;
 
     // Barge-in: Stop active AI speech when user starts listening/speaking
     stopAiSpeech();
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as unknown as { SpeechRecognition?: new () => unknown; webkitSpeechRecognition?: new () => unknown };
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognition() as {
+      continuous: boolean;
+      interimResults: boolean;
+      lang: string;
+      onstart: () => void;
+      onresult: (event: SpeechRecognitionEvent) => void;
+      onerror: (event: SpeechRecognitionErrorEvent) => void;
+      onend: () => void;
+      start: () => void;
+      stop: () => void;
+    };
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
@@ -935,25 +985,20 @@ export default function InterviewRoomPage() {
       switch (event.error) {
         case 'not-allowed':
           setTranscriptError('Microphone permission denied. Using text input fallback.');
-          setUseFallbackInput(true);
           break;
         case 'no-speech':
           setTranscriptError('No speech detected. Please try again or use text input.');
           break;
         case 'aborted':
-          // User stopped or interrupted - normal, no error needed
           break;
         case 'network':
           setTranscriptError('Network error during speech recognition. Using text input fallback.');
-          setUseFallbackInput(true);
           break;
         case 'audio-capture':
           setTranscriptError('Microphone not available. Using text input fallback.');
-          setUseFallbackInput(true);
           break;
         default:
           setTranscriptError(`Speech recognition error: ${event.error}. Using text input fallback.`);
-          setUseFallbackInput(true);
       }
     };
 
@@ -963,164 +1008,12 @@ export default function InterviewRoomPage() {
 
     recognitionRef.current = recognition;
     recognition.start();
-  };
+  }, [supportsSpeechRecognition, isListening, stopAiSpeech, handleSpeak]);
+  useEffect(() => {
+    startListeningRef.current = startListening;
+    stopListeningRef.current = stopListening;
+  }, [startListening, stopListening]);
 
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    }
-  };
-
-  // Wire refs for keyboard shortcut (avoids hoisting issues)
-  startListeningRef.current = startListening;
-  stopListeningRef.current = stopListening;
-
-  const handleSpeak = async (text?: string) => {
-    const finalText = (text || userInput).trim();
-    if (!finalText || turnState !== "user_turn") return;
-
-    sendClientLatencyLog("candidate_speech_end");
-
-    setUserInput("");
-    setInterimTranscript("");
-    setTranscriptError(null);
-    setTurnState("processing");
-
-    try {
-      // 1. Persist user utterance and get the updated entry back
-      const newEntry = await appendTranscript(finalText, "user");
-      // 2. Build updated transcript array with the NEW entry included
-      //    (React state hasn't re-rendered yet — this is the fix for the stale closure bug)
-      const updatedTranscript = [...transcript, newEntry];
-      // 3. Call /turn with the user's utterance + fresh transcript — no stale state
-      await callTurn(finalText, updatedTranscript);
-    } catch (error) {
-      setTranscriptError(
-        error instanceof Error
-          ? `Failed to send your response: ${error.message}. Please try again or use text input.`
-          : "Failed to send your response. Please try again or use text input.",
-      );
-      setTurnState("user_turn");
-    }
-  };
-
-  const isEndingRef = useRef(false);
-
-  /**
-   * Unified End-Interview Handler (Phase 6)
-   * Triggered by: manual end, natural completion, integrity termination, or turn/time cap.
-   */
-  const endInterviewSession = useCallback(async (reason: "manual" | "natural" | "integrity" | "cap_reached") => {
-    if (isEndingRef.current) return;
-    isEndingRef.current = true;
-    console.log(`[END_SESSION] Terminating interview session (${reason}) for ${interviewId}`);
-
-    // 1. Immediately stop all active audio playback
-    stopAiSpeech();
-
-    // 2. Immediately stop speech recognition
-    stopListening();
-
-    // 3. Immediately stop integrity detectors
-    if (integrityDetectorRef.current) {
-      try {
-        integrityDetectorRef.current.stop();
-      } catch (e) { }
-    }
-
-    // 4. Immediately stop camera stream and release media tracks
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((t) => t.stop());
-      setMediaStream(null);
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    // 5. Update UI state to feedback transition
-    setIsGeneratingFeedback(true);
-    setTurnState("idle");
-    setCurrentPhase("closed");
-
-    // 6. Trigger server-side feedback generation (fire-and-forget / non-blocking)
-    try {
-      fetch(`/api/interviews/${interviewId}/feedback/generate`, {
-        method: "POST",
-      }).catch((e) => console.warn("[END_SESSION] Feedback trigger error (non-critical):", e));
-    } catch { }
-
-    // 7. Route to feedback report page (which displays full report and handles polling/fallbacks)
-    router.push(`/interview/${interviewId}/feedback`);
-  }, [interviewId, mediaStream, stopAiSpeech, stopListening, router]);
-
-  const generateFeedback = async () => {
-    await endInterviewSession("natural");
-  };
-
-  const handleRagQuery = async () => {
-    const queryText = ragQuery.trim();
-    if (!queryText || isQueryingRag || !interviewId) return;
-
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text: queryText,
-    };
-
-    setChatHistory((prev) => [...prev, userMessage]);
-    setRagQuery("");
-    setIsQueryingRag(true);
-
-    try {
-      const response = await fetch("/api/interviews/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interviewId, query: queryText }),
-      });
-
-      const data = (await response.json()) as { answer?: string; error?: string };
-
-      if (!response.ok) {
-        throw new Error(
-          typeof data.error === "string"
-            ? data.error
-            : "Failed to query interview insights",
-        );
-      }
-
-      const assistantMessage: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        text:
-          typeof data.answer === "string" && data.answer.trim().length > 0
-            ? data.answer
-            : "No grounded answer was returned.",
-      };
-
-      setChatHistory((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      const assistantMessage: ChatMessage = {
-        id: `assistant-error-${Date.now()}`,
-        role: "assistant",
-        text:
-          error instanceof Error
-            ? error.message
-            : "Failed to query interview insights",
-      };
-
-      setChatHistory((prev) => [...prev, assistantMessage]);
-    } finally {
-      setIsQueryingRag(false);
-    }
-  };
-
-  const turnLabel: Record<TurnState, string> = {
-    idle: "Initializing",
-    ai_speaking: "AI Speaking",
-    user_turn: "Your Turn",
-    processing: "Processing",
-  };
 
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -1676,208 +1569,6 @@ export default function InterviewRoomPage() {
         </div>
       )}
 
-      {/* Feedback Modal */}
-      {showFeedback && feedback && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-zinc-900 border border-zinc-800 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">Interview Feedback</h2>
-              <button
-                onClick={() => setShowFeedback(false)}
-                className="text-zinc-400 hover:text-white"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Overall Score */}
-            <div className="mb-6 rounded-xl bg-zinc-800 p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-zinc-400">Overall Score</span>
-                <span className={`text-3xl font-bold ${feedback.overallScore >= 90 ? 'text-emerald-400' :
-                    feedback.overallScore >= 75 ? 'text-green-400' :
-                      feedback.overallScore >= 60 ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
-                  {feedback.overallScore}/100
-                </span>
-              </div>
-              <div className="mt-2 text-sm text-zinc-300">{feedback.summary}</div>
-            </div>
-
-            {/* Hiring Recommendation */}
-            <div className="mb-6 rounded-xl bg-zinc-800 p-4">
-              <span className="text-sm font-medium text-zinc-400">Hiring Recommendation</span>
-              <div className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-medium ${feedback.hiringRecommendation === 'strong_hire' ? 'bg-emerald-900/50 text-emerald-300' :
-                  feedback.hiringRecommendation === 'hire' ? 'bg-green-900/50 text-green-300' :
-                    feedback.hiringRecommendation === 'consider' ? 'bg-yellow-900/50 text-yellow-300' :
-                      'bg-red-900/50 text-red-300'
-                }`}>
-                {feedback.hiringRecommendation.replace('_', ' ').toUpperCase()}
-              </div>
-            </div>
-
-            {/* Strengths */}
-            {feedback.strengths.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-zinc-300 mb-3">Strengths</h3>
-                <ul className="space-y-2">
-                  {feedback.strengths.map((strength: string, i: number) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-zinc-400">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                      {strength}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Areas for Improvement */}
-            {feedback.areasForImprovement.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-zinc-300 mb-3">Areas for Improvement</h3>
-                <ul className="space-y-2">
-                  {feedback.areasForImprovement.map((gap: string, i: number) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-zinc-400">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-yellow-400 flex-shrink-0" />
-                      {gap}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Skill Assessments */}
-            {feedback.skillAssessments.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-zinc-300 mb-3">Skill Assessments</h3>
-                <div className="space-y-3">
-                  {feedback.skillAssessments.map((skill: any, i: number) => (
-                    <div key={i} className="rounded-lg bg-zinc-800 p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-zinc-200">{skill.skill}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded ${skill.confidence === 'high' ? 'bg-emerald-900/50 text-emerald-300' :
-                            skill.confidence === 'medium' ? 'bg-yellow-900/50 text-yellow-300' :
-                              'bg-red-900/50 text-red-300'
-                          }`}>
-                          {skill.confidence}
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-400">{skill.notes}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Question Feedback */}
-            {feedback.questionFeedback.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-zinc-300 mb-3">Question-by-Question Feedback</h3>
-                <div className="space-y-4">
-                  {feedback.questionFeedback.map((qf: any, i: number) => (
-                    <div key={i} className="rounded-lg bg-zinc-800 p-4">
-                      <div className="mb-2">
-                        <span className="text-xs text-zinc-500">{qf.focusArea}</span>
-                        <p className="text-sm font-medium text-zinc-200 mt-1">{qf.question}</p>
-                      </div>
-                      <div className="mb-3">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${qf.answerQuality === 'excellent' ? 'bg-emerald-900/50 text-emerald-300' :
-                            qf.answerQuality === 'good' ? 'bg-green-900/50 text-green-300' :
-                              qf.answerQuality === 'fair' ? 'bg-yellow-900/50 text-yellow-300' :
-                                'bg-red-900/50 text-red-300'
-                          }`}>
-                          {qf.answerQuality}
-                        </span>
-                      </div>
-                      {qf.strengths.length > 0 && (
-                        <div className="mb-2">
-                          <span className="text-xs text-zinc-500">Strengths:</span>
-                          <ul className="mt-1 space-y-1">
-                            {qf.strengths.map((s: string, j: number) => (
-                              <li key={j} className="text-xs text-zinc-400">• {s}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {qf.gaps.length > 0 && (
-                        <div className="mb-2">
-                          <span className="text-xs text-zinc-500">Gaps:</span>
-                          <ul className="mt-1 space-y-1">
-                            {qf.gaps.map((g: string, j: number) => (
-                              <li key={j} className="text-xs text-zinc-400">• {g}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {qf.suggestedImprovement && (
-                        <div className="mt-2 p-2 rounded bg-zinc-900/50">
-                          <span className="text-xs text-zinc-500">Suggestion:</span>
-                          <p className="text-xs text-zinc-300 mt-1">{qf.suggestedImprovement}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Integrity Signals (Advisory for Reviewer) */}
-            <div className="mb-6 rounded-xl bg-zinc-800/90 border border-zinc-700/60 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={18} className="text-purple-400" />
-                  <h3 className="text-sm font-semibold text-zinc-200">Integrity Signals for Reviewer</h3>
-                </div>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-zinc-700 text-zinc-300 font-mono">
-                  {feedback.integrityEvents?.length || 0} Events Logged
-                </span>
-              </div>
-
-              <div className="mb-3 p-2.5 rounded-lg bg-zinc-900/60 border border-zinc-800 text-[11px] text-zinc-400">
-                ℹ️ <span className="font-semibold text-zinc-300">Advisory Notice:</span> These integrity signals are local vision events recorded during the live session. They are advisory metrics intended for human reviewer context.
-              </div>
-
-              {feedback.integrityEvents && feedback.integrityEvents.length > 0 ? (
-                <div className="space-y-2">
-                  {feedback.integrityEvents.map((evt: any, i: number) => (
-                    <div key={i} className="flex items-start justify-between bg-zinc-900 p-2.5 rounded-lg border border-zinc-800/80 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
-                        <div>
-                          <span className="font-semibold text-zinc-200 uppercase tracking-wider text-[11px]">{evt.type.replace("_", " ")}</span>
-                          <p className="text-[11px] text-zinc-400">{evt.details || "Sustained anomaly detected"}</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        {new Date(evt.timestamp).toLocaleTimeString()} ({Math.round((evt.durationMs || 0) / 1000)}s)
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
-                  ✓ Clean Session: No integrity anomalies were recorded during this interview.
-                </p>
-              )}
-            </div>
-
-            {/* Recommended Follow-up */}
-            {feedback.recommendedFollowUp && (
-              <div className="mb-6 rounded-xl bg-purple-900/20 border border-purple-800/30 p-4">
-                <h3 className="text-sm font-semibold text-purple-300 mb-2">Recommended Follow-up</h3>
-                <p className="text-sm text-zinc-300">{feedback.recommendedFollowUp}</p>
-              </div>
-            )}
-
-            {/* Interview Duration */}
-            <div className="text-xs text-zinc-500">
-              Interview Duration: {feedback.interviewDuration} minutes
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Generating Feedback Overlay */}
       {isGeneratingFeedback && (

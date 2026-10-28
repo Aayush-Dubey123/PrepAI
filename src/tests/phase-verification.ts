@@ -16,12 +16,10 @@ import {
   updateKScore,
   computeTargetDepth,
   computeAvgAnswerLength,
-  getOpeningTemplate,
-  getSeedFallbackUtterance,
   generateCoverageTopics,
 } from "../lib/interview/state";
-import { selectKBTopics, ALL_KB_TOPICS, getKBEntry } from "../lib/interview/knowledge-base/index";
-import { ConversationStateSchema, type ConversationState } from "../schemas/brain";
+import { selectKBTopics, getKBEntry } from "../lib/interview/knowledge-base/index";
+import { ConversationStateSchema } from "../schemas/brain";
 import type { ExtractedResume } from "../schemas/resume";
 import { PROVIDERS, LIVE_TURN_MODELS, HEAVY_TASK_MODELS } from "../lib/llm/config";
 import { canUseOpenRouter, recordOpenRouterUsage, getOpenRouterFreeModels } from "../lib/llm/openrouter";
@@ -91,7 +89,6 @@ async function runPhase1Tests() {
     const seed = seeds[i];
     const topics = await generateCoverageTopics(jobRole, RESUME_SENIOR_BACKEND, seed);
     const templateIdx = seed % BRAIN_CONFIG.openingTemplates.length;
-    const template = getOpeningTemplate(seed);
 
     // Simulated LLM-filled opening line using template + resume
     let openingLine = "";
@@ -149,7 +146,7 @@ async function runPhase2Tests() {
   // 2. Test Strong Answer Run Escalation by Turn 4
   console.log("\n[Test 2.2: Strong-Answer Trajectory (Scores: 8, 9, 9, 8)]");
   let kScore: number = KSCORE_CONFIG.initialKScore; // 5.0
-  let recentScores: number[] = [];
+  const recentScores: number[] = [];
   const strongScores = [8, 9, 9, 8];
 
   for (let turn = 1; turn <= strongScores.length; turn++) {
@@ -172,7 +169,7 @@ async function runPhase2Tests() {
   // 3. Test Weak Answer Run De-escalation
   console.log("\n[Test 2.3: Weak-Answer Trajectory (Scores: 3, 3, 4, 3)]");
   let weakKScore: number = KSCORE_CONFIG.initialKScore; // 5.0
-  let weakScores: number[] = [];
+  const weakScores: number[] = [];
   const weakInputs = [3, 3, 4, 3];
 
   for (let turn = 1; turn <= weakInputs.length; turn++) {
@@ -308,7 +305,7 @@ async function runPhase5Tests() {
     console.log(`Selected Opening Template: #${templateIdx}`);
 
     let kScore = 5.0;
-    let history: number[] = [];
+    const history: number[] = [];
 
     for (let t = 0; t < run.scores.length; t++) {
       const score = run.scores[t];
@@ -367,7 +364,7 @@ async function runPhase6Tests() {
 
 async function main() {
   console.log("╔════════════════════════════════════════════════════════════════════════════════╗");
-  console.log("║     INTERVIA — FULL SYSTEM VERIFICATION HARNESS (PHASES 1 - 6)                ║");
+  console.log("║     PREPAI — FULL SYSTEM VERIFICATION HARNESS (PHASES 1 - 6)                  ║");
   console.log("╚════════════════════════════════════════════════════════════════════════════════╝");
 
   try {
@@ -381,8 +378,9 @@ async function main() {
     console.log("\n================================================================================");
     console.log("✅ ALL 6 PHASES VERIFIED SUCCESSFULLY WITH ZERO ERRORS!");
     console.log("================================================================================\n");
-  } catch (err: any) {
-    console.error("\n❌ VERIFICATION TEST FAILED:", err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("\n❌ VERIFICATION TEST FAILED:", msg);
     process.exit(1);
   }
 }

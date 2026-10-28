@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { LIVE_TURN_MODELS, HEAVY_TASK_MODELS, PROVIDERS } from "@/src/lib/llm/config";
 import { isOpen } from "@/src/lib/llm/circuit-breaker";
 import { generate } from "@/src/lib/llm/index";
 import "@/src/lib/config";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Dev-only endpoint" }, { status: 403 });
   }
@@ -13,23 +13,24 @@ export async function GET(req: NextRequest) {
   const disabledSet = new Set(disabledStr.toLowerCase().split(",").map((s) => s.trim()).filter(Boolean));
 
   // 1. Check Gemini endpoint
-  let geminiVerification: any = { status: "not_checked" };
+  let geminiVerification: Record<string, unknown> = { status: "not_checked" };
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
     try {
       const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
       if (resp.ok) {
         const data = await resp.json();
-        const availableGeminiModels = (data.models || [])
-          .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
-          .map((m: any) => m.name.replace("models/", ""));
+        const modelsList = (data.models || []) as Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+        const availableGeminiModels = modelsList
+          .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+          .map((m) => (m.name || "").replace("models/", ""));
         geminiVerification = { status: "ok", availableModels: availableGeminiModels };
       } else {
         const errText = await resp.text();
         geminiVerification = { status: "error", code: resp.status, detail: errText };
       }
-    } catch (e: any) {
-      geminiVerification = { status: "error", detail: e.message };
+    } catch (e: unknown) {
+      geminiVerification = { status: "error", detail: e instanceof Error ? e.message : "Unknown error" };
     }
   } else {
     geminiVerification = { status: "unconfigured", reason: "GEMINI_API_KEY is missing in env" };
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest) {
         status: "ok",
         latencyMs,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       const latencyMs = Date.now() - start;
       results.push({
         provider: m.provider,
@@ -116,7 +117,7 @@ export async function GET(req: NextRequest) {
         circuitOpen: cbOpen,
         status: "error",
         latencyMs,
-        error: err.message,
+        error: err instanceof Error ? err.message : "Unknown error",
       });
     }
   }

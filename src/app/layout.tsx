@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Intervia — AI Technical Interviews",
+  title: "PrepAI — AI Technical Interviews",
   description: "Next-generation autonomous technical interview & candidate assessment platform.",
 };
 

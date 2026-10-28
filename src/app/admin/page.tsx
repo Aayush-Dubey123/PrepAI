@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   BarChart3,
@@ -10,7 +10,6 @@ import {
   FileText,
   TrendingUp,
   Award,
-  Clock,
   Database,
   AlertTriangle,
   CheckCircle2,
@@ -23,15 +22,9 @@ import {
   Download,
   Globe,
   Wifi,
-  Terminal,
   Layers,
-  Sparkles,
-  Search,
-  Check,
-  ChevronRight,
   Info,
   Camera,
-  UserCheck,
   PieChart as PieChartIcon,
 } from "lucide-react";
 import {
@@ -102,16 +95,14 @@ export default function AdminDashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
-  const [isMounted, setIsMounted] = useState(false);
+  const emptySubscribe = () => () => {};
+  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (isManual = true) => {
     try {
-      setRefreshing(true);
+      if (isManual) setRefreshing(true);
       const res = await fetch("/api/admin/analytics");
       if (res.status === 401) {
         setError("Unauthorized — Please sign in to access admin telemetry.");
@@ -130,8 +121,9 @@ export default function AdminDashboardPage() {
       const json = await res.json();
       setData(json);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || "Failed to load analytics data");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load analytics data";
+      setError(msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -139,7 +131,17 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    let ignore = false;
+    const run = async () => {
+      await Promise.resolve();
+      if (!ignore) {
+        await fetchData(false);
+      }
+    };
+    void run();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleDownloadPdf = async () => {
@@ -181,7 +183,7 @@ export default function AdminDashboardPage() {
       }
 
       const dateStr = new Date().toISOString().split("T")[0];
-      pdf.save(`Intervia_Admin_Analytics_Report_${dateStr}.pdf`);
+      pdf.save(`PrepAI_Admin_Analytics_Report_${dateStr}.pdf`);
     } catch (err) {
       console.error("Failed to generate PDF:", err);
       alert("Error generating PDF report. Please try again.");
@@ -297,7 +299,7 @@ export default function AdminDashboardPage() {
                   RESTRICTED
                 </span>
               </div>
-              <p className="text-[10px] text-zinc-400 font-mono">Intervia Recharts Telemetry v1.0</p>
+              <p className="text-[10px] text-zinc-400 font-mono">PrepAI Recharts Telemetry v1.0</p>
             </div>
           </div>
         </div>
@@ -308,7 +310,7 @@ export default function AdminDashboardPage() {
           </span>
 
           <button
-            onClick={fetchData}
+            onClick={() => { void fetchData(true); }}
             disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-medium text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer"
           >
@@ -789,6 +791,7 @@ export default function AdminDashboardPage() {
                     >
                       <div className="relative aspect-video bg-zinc-900 overflow-hidden flex items-center justify-center">
                         {item.candidateSnapshot ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={item.candidateSnapshot}
                             alt={item.candidateName}
@@ -896,7 +899,7 @@ export default function AdminDashboardPage() {
               <strong className="text-white">{platform.totalAuditEvents}</strong> audit events stored in PostgreSQL.
             </p>
             <p className="text-[10px] text-zinc-500 font-mono">
-              Generated at {new Date(data.generatedAt).toLocaleString()} • Intervia Platform v1.0
+              Generated at {new Date(data.generatedAt).toLocaleString()} • PrepAI Platform v1.0
             </p>
           </div>
         </div>
@@ -907,12 +910,19 @@ export default function AdminDashboardPage() {
 
 // ── Custom Shadcn Tooltip Component ──────────────────────────────────────────
 
-function ShadcnCustomTooltip({ active, payload, label }: any) {
+interface TooltipItem {
+  name: string;
+  value: string | number;
+  color?: string;
+  fill?: string;
+}
+
+function ShadcnCustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipItem[]; label?: string }) {
   if (active && payload && payload.length) {
     return (
       <div className="bg-[#141417] border border-white/15 rounded-xl p-3 shadow-2xl space-y-1 text-xs backdrop-blur-md">
         <p className="text-[11px] font-mono text-zinc-400 uppercase">{label}</p>
-        {payload.map((entry: any, index: number) => (
+        {payload.map((entry: TooltipItem, index: number) => (
           <p key={`item-${index}`} className="font-bold text-white flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
             <span>{entry.name}: {entry.value}</span>

@@ -41,6 +41,7 @@ export function generateFeedbackPdf(
   feedback: FeedbackExportData,
   jobRole: string,
   interviewId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   transcript: TranscriptChunkExport[] = []
 ) {
   const doc = new jsPDF({
@@ -82,7 +83,7 @@ export function generateFeedbackPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...colors.textMuted);
-    doc.text("INTERVIA EVALUATION REPORT", margin, 10);
+    doc.text("PREPAI EVALUATION REPORT", margin, 10);
     doc.text(`ID: ${interviewId.slice(0, 8)}`, pageWidth - margin, 10, { align: "right" });
     doc.setDrawColor(...colors.border);
     doc.setLineWidth(0.2);
@@ -96,7 +97,7 @@ export function generateFeedbackPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
   doc.setTextColor(255, 255, 255);
-  doc.text("Intervia Evaluation Report", margin, 18);
+  doc.text("PrepAI Evaluation Report", margin, 18);
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
@@ -424,11 +425,11 @@ export function generateFeedbackPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...colors.textMuted);
-    doc.text("Intervia Autonomous Evaluation Platform • Strictly Confidential", margin, pageHeight - 7);
+    doc.text("PrepAI Autonomous Evaluation Platform • Strictly Confidential", margin, pageHeight - 7);
     doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 7, { align: "right" });
   }
 
   // Save the PDF
   const safeJobRole = jobRole.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  doc.save(`Intervia-Report-${safeJobRole}-${interviewId.slice(0, 8)}.pdf`);
+  doc.save(`PrepAI-Report-${safeJobRole}-${interviewId.slice(0, 8)}.pdf`);
 }

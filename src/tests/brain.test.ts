@@ -7,15 +7,9 @@
 import { ConversationStateSchema } from "../schemas/brain";
 import {
   loadState,
-  isTooSimilar,
-  tokenOverlap,
   enforceDecisionPolicy,
-  getFallbackUtterance,
-  activateNextTopic,
-  closeActiveTopic,
   advancePhase,
 } from "../lib/interview/state";
-import { BRAIN_CONFIG } from "../lib/interview/brain-config";
 import { buildTurnContext } from "../lib/interview/prompt";
 
 let passed = 0;
@@ -26,8 +20,9 @@ function test(name: string, fn: () => void) {
     fn();
     console.log(`  ✅  ${name}`);
     passed++;
-  } catch (e: any) {
-    console.error(`  ❌  ${name}\n     ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`  ❌  ${name}\n     ${msg}`);
     failed++;
   }
 }

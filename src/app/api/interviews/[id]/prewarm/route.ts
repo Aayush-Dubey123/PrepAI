@@ -59,7 +59,7 @@ export async function POST(
     }
 
     // 3. Load state
-    let state = loadState(interview.plan);
+    const state = loadState(interview.plan);
     const seed = state.conversationSeed ?? 0;
 
     // 4. Pre-generate coverage topics if empty
@@ -79,7 +79,6 @@ export async function POST(
       // Pick 3 structurally different templates starting from seed
       for (let i = 0; i < 3; i++) {
         const templateIdx = (seed + i) % templates.length;
-        const templateInstruction = templates[templateIdx];
 
         // Format a quick prewarmed opening prompt using candidate info
         const candidateSkill = resumeData?.topSkills?.[i % (resumeData.topSkills.length || 1)] || "software engineering";
@@ -123,10 +122,11 @@ export async function POST(
       openingVariantsCount: state.openingVariants.length,
       seed,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[PREWARM] Error during prewarm:", err);
     return NextResponse.json(
-      { error: "Failed to prewarm interview", message: err.message },
+      { error: "Failed to prewarm interview", message },
       { status: 500 },
     );
   }

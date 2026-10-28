@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cookie, ShieldCheck, X, Check, Settings } from "lucide-react";
+import { Cookie, X, Check, Settings } from "lucide-react";
 
 export function CookieConsent() {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,7 +14,7 @@ export function CookieConsent() {
 
   useEffect(() => {
     // Check if consent has already been recorded
-    const consent = localStorage.getItem("intervia_cookie_consent");
+    const consent = localStorage.getItem("prepai_cookie_consent") || localStorage.getItem("intervia_cookie_consent");
     if (!consent) {
       // Small delayed reveal for slick UI entry
       const timer = setTimeout(() => setIsOpen(true), 800);
@@ -29,8 +29,8 @@ export function CookieConsent() {
       preferences: acceptedPrefs,
     };
 
-    localStorage.setItem("intervia_cookie_consent", JSON.stringify(payload));
-    document.cookie = `intervia_cookie_consent=true; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+    localStorage.setItem("prepai_cookie_consent", JSON.stringify(payload));
+    document.cookie = `prepai_cookie_consent=true; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
 
     setIsOpen(false);
     setShowSettings(false);
@@ -138,11 +138,11 @@ export function CookieConsent() {
               </button>
             )}
             <button
-              onClick={() => saveConsent(preferences)}
+              onClick={showSettings ? () => saveConsent(preferences) : handleAcceptAll}
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-[#2b66f6] hover:bg-[#1f52d4] transition-all shadow-[0_0_15px_rgba(43,102,246,0.3)]"
             >
               <Check size={14} />
-              <span>Accept Cookies</span>
+              <span>{showSettings ? "Save Preferences" : "Accept All"}</span>
             </button>
           </div>
         </div>

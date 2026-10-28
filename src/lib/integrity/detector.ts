@@ -91,7 +91,7 @@ export class IntegrityDetector {
 
   private videoCallbackId: number | null = null;
   private animFrameId: number | null = null;
-  private objectTimerId: any = null;
+  private objectTimerId: number | null = null;
   private canvasAnimId: number | null = null;
   private isProcessingFaceFrame = false;
 
@@ -327,7 +327,7 @@ export class IntegrityDetector {
 
         if (elapsed < durationMs) {
           if ("requestVideoFrameCallback" in video) {
-            (video as any).requestVideoFrameCallback(stepCalibration);
+            (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: FrameRequestCallback) => number }).requestVideoFrameCallback(stepCalibration);
           } else {
             requestAnimationFrame(stepCalibration);
           }
@@ -361,7 +361,7 @@ export class IntegrityDetector {
       };
 
       if ("requestVideoFrameCallback" in video) {
-        (video as any).requestVideoFrameCallback(stepCalibration);
+        (video as HTMLVideoElement & { requestVideoFrameCallback: (cb: FrameRequestCallback) => number }).requestVideoFrameCallback(stepCalibration);
       } else {
         requestAnimationFrame(stepCalibration);
       }
@@ -434,15 +434,15 @@ export class IntegrityDetector {
     this.isCalibrating = false;
 
     if (this.videoCallbackId && this.videoElement && "cancelVideoFrameCallback" in this.videoElement) {
-      (this.videoElement as any).cancelVideoFrameCallback(this.videoCallbackId);
+      (this.videoElement as HTMLVideoElement & { cancelVideoFrameCallback: (id: number) => void }).cancelVideoFrameCallback(this.videoCallbackId);
       this.videoCallbackId = null;
     }
     if (this.animFrameId) {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
-    if (this.objectTimerId) {
-      clearInterval(this.objectTimerId);
+    if (this.objectTimerId !== null) {
+      window.clearInterval(this.objectTimerId);
       this.objectTimerId = null;
     }
 
@@ -509,7 +509,7 @@ export class IntegrityDetector {
 
       if (this.isRunning && this.videoElement) {
         if ("requestVideoFrameCallback" in this.videoElement) {
-          this.videoCallbackId = (this.videoElement as any).requestVideoFrameCallback(processFrame);
+          this.videoCallbackId = (this.videoElement as HTMLVideoElement & { requestVideoFrameCallback: (cb: FrameRequestCallback) => number }).requestVideoFrameCallback(processFrame);
         } else {
           this.animFrameId = requestAnimationFrame(processFrame);
         }
@@ -518,7 +518,7 @@ export class IntegrityDetector {
 
     if (this.videoElement) {
       if ("requestVideoFrameCallback" in this.videoElement) {
-        this.videoCallbackId = (this.videoElement as any).requestVideoFrameCallback(processFrame);
+        this.videoCallbackId = (this.videoElement as HTMLVideoElement & { requestVideoFrameCallback: (cb: FrameRequestCallback) => number }).requestVideoFrameCallback(processFrame);
       } else {
         this.animFrameId = requestAnimationFrame(processFrame);
       }
@@ -529,7 +529,7 @@ export class IntegrityDetector {
    * Object Detection Loop (every 1.5s on independent timer)
    */
   private runObjectDetectionLoop = () => {
-    this.objectTimerId = setInterval(() => {
+    this.objectTimerId = window.setInterval(() => {
       if (!this.isRunning) return;
       if (
         this.objectDetector &&
@@ -978,7 +978,7 @@ export class IntegrityDetector {
     }
   };
 
-  private handlePaste = (e: ClipboardEvent) => {
+  private handlePaste = () => {
     this.callbacks.onViolation({
       type: "paste_attempt",
       timestamp: Date.now(),
@@ -1044,10 +1044,10 @@ function calculateHeadPose(landmarks: Array<{ x: number; y: number; z: number }>
   return { yaw, pitch, roll };
 }
 
-function extractPoseFromMatrix(matrix: any): { yaw: number; pitch: number; roll: number } | null {
+function extractPoseFromMatrix(matrix: unknown): { yaw: number; pitch: number; roll: number } | null {
   if (!matrix) return null;
-  const data: number[] = Array.isArray(matrix) ? matrix : matrix.data || matrix.rows || null;
-  if (!data || data.length < 16) return null;
+  const matrixObj = matrix as { data?: number[]; rows?: number[] };
+  const data: number[] = Array.isArray(matrix) ? matrix : matrixObj.data || matrixObj.rows || [];
 
   const r02 = data[8];
   const r12 = data[9];

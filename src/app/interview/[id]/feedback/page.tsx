@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -61,7 +61,6 @@ interface TranscriptChunk {
 
 export default function InterviewFeedbackPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const interviewId = params.id;
 
   const [loading, setLoading] = useState(true);
@@ -130,10 +129,11 @@ export default function InterviewFeedbackPage() {
             if (pollInterval) clearInterval(pollInterval);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to load feedback report";
         console.error("[FEEDBACK_PAGE_ERROR]", err);
         if (isMounted && attempts >= 3) {
-          setError(err.message || "Failed to load feedback report");
+          setError(message);
           setLoading(false);
         }
       }

@@ -13,7 +13,6 @@ import {
   type ConversationState,
   type CoverageTopic,
   type AskedQuestion,
-  type TurnScore,
   type LLMTurnResponse,
   type CandidateIntent,
 } from "@/src/schemas/brain";
@@ -47,16 +46,16 @@ export async function saveState(
   interviewId: string,
   state: ConversationState,
   extraFields?: {
-    currentPhase?: string;
+    currentPhase?: "greeting" | "rapport" | "technical" | "wrapup" | "closed";
     status?: "ongoing" | "completed" | "failed";
   },
 ): Promise<void> {
   await db
     .update(interviews)
     .set({
-      plan: state as any,
-      ...(extraFields?.currentPhase ? { currentPhase: extraFields.currentPhase as any } : {}),
-      ...(extraFields?.status ? { status: extraFields.status as any } : {}),
+      plan: state,
+      ...(extraFields?.currentPhase ? { currentPhase: extraFields.currentPhase } : {}),
+      ...(extraFields?.status ? { status: extraFields.status } : {}),
     })
     .where(eq(interviews.id, interviewId));
 }
@@ -321,7 +320,7 @@ export function enforceDecisionPolicy(
   state: ConversationState,
 ): DecisionResult {
   const { intent, evaluation, decision, say } = llmResponse;
-  let currentState = structuredClone(state);
+  const currentState = structuredClone(state);
 
   // 1. Stop request
   if (intent === "stop" || decision.action === "end") {
@@ -613,12 +612,13 @@ export function computeTargetDepth(
   kScoreTrend: KScoreTrend,
   turnsOnCurrentTopic: number = 0,
 ): TargetDepth {
-  const { hardDepthMinScore, mediumDepthMinScore, risingTrendBoost, fallingTrendDampener } = KSCORE_CONFIG;
+  const { hardDepthMinScore, mediumDepthMinScore, risingTrendBoost, fallingTrendDampener, maxTurnsBeforeEscalate } = KSCORE_CONFIG;
 
   const trendAdjust = kScoreTrend === "rising" ? -risingTrendBoost : kScoreTrend === "falling" ? fallingTrendDampener : 0;
+  const turnsAdjust = turnsOnCurrentTopic >= maxTurnsBeforeEscalate ? -0.5 : 0;
 
-  const effectiveHard = hardDepthMinScore + trendAdjust;
-  const effectiveMedium = mediumDepthMinScore + trendAdjust;
+  const effectiveHard = hardDepthMinScore + trendAdjust + turnsAdjust;
+  const effectiveMedium = mediumDepthMinScore + trendAdjust + turnsAdjust;
 
   if (kScore >= effectiveHard) return "hard";
   if (kScore >= effectiveMedium) return "medium";

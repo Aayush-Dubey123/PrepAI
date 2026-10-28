@@ -16,7 +16,6 @@ import {
   Code2,
   ArrowRight,
   RefreshCw,
-  Edit3,
   Loader2,
 } from "lucide-react";
 import { ExtractedResume } from "@/src/schemas/resume";
@@ -98,9 +97,10 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
         setCandidateProfile(data.structuredData);
       }
       setStep("confirm");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Resume parse error:", err);
-      setError(err.message || "An error occurred while analyzing your resume. You can manually edit your profile below.");
+      const msg = err instanceof Error ? err.message : "An error occurred while analyzing your resume. You can manually edit your profile below.";
+      setError(msg);
       // Fallback to confirm step with default profile so user isn't stuck
       setStep("confirm");
     }
@@ -239,9 +239,10 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
       } else {
         router.push(`/interview/${data.id}/lobby`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Initialize interview error:", err);
-      setError(err.message || "Network error while launching interview session.");
+      const msg = err instanceof Error ? err.message : "Network error while launching interview session.";
+      setError(msg);
       setIsLaunching(false);
     }
   };

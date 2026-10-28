@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { LatencyEvent } from "./logger";
+import { LatencyEvent, LatencyStage } from "./logger";
 
 export interface TurnLatency {
   interviewId: string;
@@ -106,7 +106,7 @@ export function printLatencyReport(targetInterviewId?: string, logFilePath?: str
             events.push({
               interviewId: matchId[1],
               turnId: matchTurn[1],
-              stage: matchStage[1] as any,
+              stage: matchStage[1] as LatencyStage,
               ts: parseInt(matchTs[1], 10),
             });
           }

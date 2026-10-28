@@ -3,12 +3,19 @@ import { EMBEDDING_DIMENSIONS } from "@/src/db/vector";
 
 const EMBEDDING_MODEL = "gemini-embedding-001";
 
+let cachedAiClient: GoogleGenAI | null = null;
+let lastApiKey: string | null = null;
+
 function getGenAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured");
   }
-  return new GoogleGenAI({ apiKey });
+  if (!cachedAiClient || lastApiKey !== apiKey) {
+    cachedAiClient = new GoogleGenAI({ apiKey });
+    lastApiKey = apiKey;
+  }
+  return cachedAiClient;
 }
 
 export async function embedText(text: string): Promise<number[]> {

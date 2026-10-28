@@ -15,7 +15,7 @@ export async function exportQuestionsCSV(interviewId?: string): Promise<string> 
     fs.mkdirSync(evalDir, { recursive: true });
   }
 
-  let targetInterviews: Array<{ id: string; plan: any }> = [];
+  let targetInterviews: Array<{ id: string; plan: unknown }> = [];
   if (interviewId) {
     const rows = await db
       .select({ id: interviews.id, plan: interviews.plan })
@@ -55,14 +55,14 @@ export async function exportQuestionsCSV(interviewId?: string): Promise<string> 
     const userChunks = chunks.filter((c) => c.speaker === "user");
     const aiChunks = chunks.filter((c) => c.speaker === "ai");
 
-    const plan = target.plan as any;
+    const plan = target.plan as { asked?: Array<{ question?: string; topic?: string }>; phase?: string } | null;
     const asked = plan?.asked || [];
 
     for (let i = 0; i < aiChunks.length; i++) {
       const generatedQuestion = aiChunks[i].content || "";
       const previousCandidateResponse = i > 0 && userChunks[i - 1] ? userChunks[i - 1].content : "";
       
-      const askedObj = asked.find((a: any) => a.question === generatedQuestion);
+      const askedObj = asked.find((a: { question?: string }) => a.question === generatedQuestion);
       const isResumeGrounded = askedObj?.topic === "warmup" || plan?.phase === "warmup" || askedObj?.topic?.includes("resume");
 
       const escapeCsv = (str: string) => `"${(str || "").replace(/"/g, '""')}"`;

@@ -3,7 +3,6 @@
  * Works with Groq and any other OpenAI-compatible provider.
  */
 
-import type { z } from "zod";
 import type { GenerateOptions, GenerateResult } from "./gemini-adapter";
 import { PROVIDERS } from "./config";
 import { recordFailure, recordSuccess } from "./circuit-breaker";
@@ -73,11 +72,12 @@ export async function openaiCompatGenerate(
     console.log(`[LLM] ${providerId}/${opts.model} ok ${latencyMs}ms`);
     recordSuccess(providerId, opts.model);
     return { text, provider: providerId, model: opts.model, latencyMs };
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timer);
     const latencyMs = Date.now() - start;
+    const errorObj = err as { name?: string; message?: string };
 
-    if (err?.name === "AbortError") {
+    if (errorObj?.name === "AbortError") {
       console.warn(
         `[LLM] ${providerId}/${opts.model} TIMEOUT ${latencyMs}ms`,
       );

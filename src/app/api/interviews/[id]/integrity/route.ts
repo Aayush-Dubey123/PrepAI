@@ -71,7 +71,7 @@ export async function POST(
     // Server-side dedup: identical event type in same 2-second window → silently accept
     if (isDuplicateEvent(interviewId, eventPayload)) {
       console.log(`[INTEGRITY_API] Dedup: interview=${interviewId} type=${eventPayload.type} (suppressed)`);
-      const currentFeedback = (interview.feedback as Record<string, any>) || {};
+      const currentFeedback = (interview.feedback as Record<string, unknown>) || {};
       const existingEvents: IntegrityEvent[] = Array.isArray(currentFeedback.integrityEvents)
         ? currentFeedback.integrityEvents
         : [];
@@ -86,7 +86,7 @@ export async function POST(
     }
 
     // Extract existing feedback object & integrity events
-    const currentFeedback = (interview.feedback as Record<string, any>) || {};
+    const currentFeedback = (interview.feedback as Record<string, unknown>) || {};
     const existingEvents: IntegrityEvent[] = Array.isArray(currentFeedback.integrityEvents)
       ? currentFeedback.integrityEvents
       : [];

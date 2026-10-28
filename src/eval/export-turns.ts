@@ -4,7 +4,7 @@ dotenv.config();
 
 import fs from "fs";
 import path from "path";
-import { parseLatencyEvents } from "./collect-latency";
+import { parseLatencyEvents, type TurnLatency } from "./collect-latency";
 import { LatencyEvent } from "./logger";
 
 export async function exportTurnsCSV(interviewId?: string): Promise<string> {
@@ -18,7 +18,7 @@ export async function exportTurnsCSV(interviewId?: string): Promise<string> {
   }
 
   // Fetch interviews to export
-  let targetInterviews: Array<{ id: string; plan: any }> = [];
+  let targetInterviews: Array<{ id: string; plan: unknown }> = [];
   if (interviewId) {
     const rows = await db
       .select({ id: interviews.id, plan: interviews.plan })
@@ -38,7 +38,7 @@ export async function exportTurnsCSV(interviewId?: string): Promise<string> {
   }
 
   // Read latency events log if present
-  let latencyMap: Record<string, any> = {};
+  let latencyMap: Record<string, TurnLatency> = {};
   const latFile = path.join(evalDir, "latency_events.jsonl");
   if (fs.existsSync(latFile)) {
     const lines = fs.readFileSync(latFile, "utf-8").split("\n");
@@ -72,9 +72,8 @@ export async function exportTurnsCSV(interviewId?: string): Promise<string> {
 
     // Group user/ai transcript turns sequentially
     const userChunks = chunks.filter((c) => c.speaker === "user");
-    const aiChunks = chunks.filter((c) => c.speaker === "ai");
 
-    const plan = target.plan as any;
+    const plan = target.plan as { scores?: Array<{ turnIndex?: number; score?: number }>; asked?: Array<{ turnIndex?: number; topic?: string }>; lastResponse?: { _dev?: { action?: string } } } | null;
     const scores = plan?.scores || [];
     const asked = plan?.asked || [];
 
@@ -84,8 +83,8 @@ export async function exportTurnsCSV(interviewId?: string): Promise<string> {
 
       const userText = userChunk.content || "";
       const aiTranscriptText = userText; // AI STT hypothesis
-      const scoreObj = scores.find((s: any) => s.turnIndex === turnNum - 1 || s.turnIndex === turnNum);
-      const askedObj = asked.find((a: any) => a.turnIndex === turnNum - 1 || a.turnIndex === turnNum);
+      const scoreObj = scores.find((s: { turnIndex?: number }) => s.turnIndex === turnNum - 1 || s.turnIndex === turnNum);
+      const askedObj = asked.find((a: { turnIndex?: number }) => a.turnIndex === turnNum - 1 || a.turnIndex === turnNum);
 
       // Determine AI decision action: check lastResponse _dev action or topic change
       const aiDecisionAction =

@@ -11,11 +11,13 @@
 const IS_DISABLED =
   process.env.RATE_LIMIT_DISABLED === "true" && process.env.NODE_ENV !== "production";
 
-// ─── Startup log ──────────────────────────────────────────────────────────────
-if (IS_DISABLED) {
-  console.warn("[RATE_LIMIT] ⚠️  ALL rate limits DISABLED (RATE_LIMIT_DISABLED=true, non-production)");
-} else {
-  console.log("[RATE_LIMIT] Limits active: interview_create=5/hr, turn=30/min, integrity=60/min, tts=20/min, parse_resume=10/hr, llm=5/min");
+// ─── Startup log (non-build dev only) ──────────────────────────────────────────
+if (process.env.NODE_ENV !== "production" && !process.env.NEXT_PHASE && process.env.RATE_LIMIT_VERBOSE === "true") {
+  if (IS_DISABLED) {
+    console.warn("[RATE_LIMIT] ⚠️  ALL rate limits DISABLED (RATE_LIMIT_DISABLED=true, non-production)");
+  } else {
+    console.log("[RATE_LIMIT] Limits active: interview_create=5/hr, turn=30/min, integrity=60/min, tts=20/min, parse_resume=10/hr, llm=5/min");
+  }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -53,9 +55,11 @@ export function isReplayedRequest(clientRequestId: string | undefined): boolean 
   if (!clientRequestId) return false;
   const now = Date.now();
 
-  // Clean up old entries (older than 10 min)
-  for (const [id, ts] of seenRequestIds) {
-    if (now - ts > 10 * 60 * 1000) seenRequestIds.delete(id);
+  // Clean up old entries if map grows
+  if (seenRequestIds.size > 100) {
+    for (const [id, ts] of seenRequestIds) {
+      if (now - ts > 10 * 60 * 1000) seenRequestIds.delete(id);
+    }
   }
 
   if (seenRequestIds.has(clientRequestId)) return true;
@@ -70,18 +74,24 @@ function check(
   key: string,
   limit: number,
   windowMs: number,
-  actionLabel: string,
 ): RateLimitResult {
   if (IS_DISABLED) return { allowed: true };
 
   const now = Date.now();
+
+  // Periodic sweep of expired keys when store grows to prevent memory bloat
+  if (store.size > 100) {
+    for (const [k, v] of store) {
+      if (now > v.resetTime) store.delete(k);
+    }
+  }
+
   const entry = store.get(key);
 
   if (!entry || now > entry.resetTime) {
     store.set(key, { count: 1, resetTime: now + windowMs });
     return { allowed: true };
   }
-
   if (entry.count >= limit) {
     const retryAfterSec = Math.ceil((entry.resetTime - now) / 1000);
     return {
@@ -103,10 +113,10 @@ function check(
  * 5 per hour, 20 per day per user.
  */
 export function checkInterviewCreate(userId: string): RateLimitResult {
-  const hourly = check(stores.interview_create, `ic:${userId}`, 5, 60 * 60 * 1000, "interview_create");
+  const hourly = check(stores.interview_create, `ic:${userId}`, 5, 60 * 60 * 1000);
   if (!hourly.allowed) return hourly;
 
-  const daily = check(stores.interview_create_day, `ic_day:${userId}`, 20, 24 * 60 * 60 * 1000, "interview_create_day");
+  const daily = check(stores.interview_create_day, `ic_day:${userId}`, 20, 24 * 60 * 60 * 1000);
   return daily;
 }
 
@@ -115,7 +125,7 @@ export function checkInterviewCreate(userId: string): RateLimitResult {
  * 30 per minute per user. Never uses the interview-creation bucket.
  */
 export function checkTurnLimit(userId: string): RateLimitResult {
-  return check(stores.turn, `turn:${userId}`, 30, 60 * 1000, "turn");
+  return check(stores.turn, `turn:${userId}`, 30, 60 * 1000);
 }
 
 /**
@@ -123,28 +133,28 @@ export function checkTurnLimit(userId: string): RateLimitResult {
  * 60 per minute per interview (not per user — avoids cross-interview bleed).
  */
 export function checkIntegrityLimit(interviewId: string): RateLimitResult {
-  return check(stores.integrity, `integrity:${interviewId}`, 60, 60 * 1000, "integrity");
+  return check(stores.integrity, `integrity:${interviewId}`, 60, 60 * 1000);
 }
 
 /**
  * POST /api/tts — per-minute request cap (in addition to existing char budget).
  */
 export function checkTtsLimit(userId: string): RateLimitResult {
-  return check(stores.tts_req, `tts:${userId}`, 20, 60 * 1000, "tts");
+  return check(stores.tts_req, `tts:${userId}`, 20, 60 * 1000);
 }
 
 /**
  * POST /api/parse-resume
  */
 export function checkParseResumeLimit(userId: string): RateLimitResult {
-  return check(stores.parse_resume, `pr:${userId}`, 10, 60 * 60 * 1000, "parse_resume");
+  return check(stores.parse_resume, `pr:${userId}`, 10, 60 * 60 * 1000);
 }
 
 /**
  * LLM-backed routes: /chat, /feedback/generate
  */
 export function checkLlmRouteLimit(userId: string): RateLimitResult {
-  return check(stores.llm, `llm:${userId}`, 5, 60 * 1000, "llm");
+  return check(stores.llm, `llm:${userId}`, 5, 60 * 1000);
 }
 
 /**
@@ -164,12 +174,3 @@ export function devClearUserLimits(userId: string): void {
   console.log(`[RATE_LIMIT] Dev: cleared all counters for user ${userId}`);
 }
 
-// Keep legacy export so old callers don't crash at import time (removed from routes below)
-/** @deprecated Use checkInterviewCreate / checkTurnLimit / checkIntegrityLimit */
-export function checkRateLimit(userId: string): RateLimitResult {
-  return checkInterviewCreate(userId);
-}
-/** @deprecated */
-export function checkDailyLimit(_userId: string): RateLimitResult {
-  return { allowed: true };
-}

@@ -8,10 +8,8 @@ import {
   calculateMAE,
   calculateCorrelations,
   calculateQWK,
-  calculateCohensKappa,
-  calculatePairedTTest,
 } from "./metrics";
-import { parseLatencyEvents } from "./collect-latency";
+import { parseLatencyEvents, type TurnLatency } from "./collect-latency";
 
 function parseCsv(content: string): Array<Record<string, string>> {
   const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
@@ -78,7 +76,7 @@ export function runFullReport(): void {
   }
 
   // Latency parsing
-  let latencyList: any[] = [];
+  let latencyList: TurnLatency[] = [];
   const latFile = path.join(evalDir, "latency_events.jsonl");
   if (fs.existsSync(latFile)) {
     const lines = fs.readFileSync(latFile, "utf-8").split("\n");
@@ -152,7 +150,7 @@ export function runFullReport(): void {
   const totalTurnsWithLatency = latencyList.filter((l) => l.L_total !== undefined);
   const avgLatencyVal =
     totalTurnsWithLatency.length > 0
-      ? totalTurnsWithLatency.reduce((acc, t) => acc + t.L_total, 0) / totalTurnsWithLatency.length
+      ? totalTurnsWithLatency.reduce((acc, t) => acc + (t.L_total || 0), 0) / totalTurnsWithLatency.length
       : null;
 
   // Format table output helper
@@ -179,7 +177,7 @@ export function runFullReport(): void {
 
   // Print Terminal Output
   console.log("\n=======================================================");
-  console.log("    INTERVIA AGGREGATE EVALUATION REPORT (TABLE 7)   ");
+  console.log("    PREPAI AGGREGATE EVALUATION REPORT (TABLE 7)     ");
   console.log("=======================================================");
   console.log("| Performance Measure             | Result                                                  |");
   console.log("|---------------------------------|---------------------------------------------------------|");
@@ -190,7 +188,7 @@ export function runFullReport(): void {
 
   // Write STATISTICS.md
   const statsMdPath = path.join(docsDir, "STATISTICS.md");
-  let mdContent = `# Intervia Evaluation & Performance Statistics Report
+  let mdContent = `# PrepAI Evaluation & Performance Statistics Report
 
 *Generated on ${new Date().toISOString()}*
 

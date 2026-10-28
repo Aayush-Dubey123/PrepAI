@@ -29,7 +29,7 @@ function assert(condition: boolean, label: string, details?: string) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeState(overrides: Record<string, any> = {}) {
+function makeState(overrides: Record<string, unknown> = {}) {
   return ConversationStateSchema.parse({
     phase: "core",
     coverage: [{

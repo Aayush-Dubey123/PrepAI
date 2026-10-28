@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import React, { useLayoutEffect, useRef, type CSSProperties } from 'react';
 
 export type LatticeStatus = 'working' | 'done' | 'error';
 export type LatticePatternName =
@@ -104,10 +104,6 @@ const STYLE = `
 `;
 const fmt = (ds: number) =>
   ds < 600 ? `${(ds / 10).toFixed(1)}s` : `${Math.floor(ds / 600)}m ${((ds % 600) / 10).toFixed(1)}s`;
-const spoken = (ds: number) =>
-  ds < 600
-    ? `${(ds / 10).toFixed(1)} seconds`
-    : `${Math.floor(ds / 600)} minutes ${((ds % 600) / 10).toFixed(1)} seconds`;
 
 const LatticeLoader: React.FC<LatticeLoaderProps> = ({
   label = 'Thinking',
@@ -140,10 +136,8 @@ const LatticeLoader: React.FC<LatticeLoaderProps> = ({
 
   const timerRef = useRef<HTMLSpanElement>(null);
   const dsRef = useRef(0);
-  const markRef = useRef<'done' | 'error'>('done');
-  const mark = status === 'working' ? markRef.current : status;
-  markRef.current = mark;
-  const [announce, setAnnounce] = useState(`${label}, in progress`);
+  const mark: 'done' | 'error' = status === 'error' ? 'error' : 'done';
+  const announce = `${status === 'working' ? label : status === 'done' ? doneLabel : errorLabel}`;
 
   const paint = (ds: number) => {
     dsRef.current = ds;
@@ -161,13 +155,6 @@ const LatticeLoader: React.FC<LatticeLoaderProps> = ({
     const id = setInterval(() => paint(Math.floor((performance.now() - startedAt) / 100)), 100);
     return () => clearInterval(id);
   }, [status, elapsed]);
-
-  useEffect(() => {
-    if (status === 'working') setAnnounce(`${label}, in progress`);
-    else setAnnounce(`${status === 'done' ? doneLabel : errorLabel}${showTimer ? ` ${spoken(dsRef.current)}` : ''}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
   return (
     <span
       role="status"

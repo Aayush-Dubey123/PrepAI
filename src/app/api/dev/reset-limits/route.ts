@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { devClearUserLimits } from "@/src/lib/rate-limit";
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Dev-only endpoint" }, { status: 403 });
   }

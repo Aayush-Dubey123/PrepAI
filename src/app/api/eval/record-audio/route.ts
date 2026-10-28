@@ -58,10 +58,11 @@ export async function POST(req: NextRequest) {
       success: true,
       filePath: relativeAudioPath,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to save audio clip";
     console.error("[RESEARCH_MODE] Save audio error:", err);
     return NextResponse.json(
-      { error: err?.message || "Failed to save audio clip" },
+      { error: msg },
       { status: 500 }
     );
   }

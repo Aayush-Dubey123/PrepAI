@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
 
     logEvalLatency(body);
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Failed to log latency" }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to log latency";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

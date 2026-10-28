@@ -263,14 +263,15 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ audios: audioResults, cached: false, fallback: false });
-  } catch (error: any) {
-    console.error("[TTS] Unexpected error:", error?.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unexpected TTS error";
+    console.error("[TTS] Unexpected error:", message);
     if (reqUserId) {
-      return fallbackResponse(req, reqUserId, reqSessionId, error?.message ?? "Unexpected TTS error");
+      return fallbackResponse(req, reqUserId, reqSessionId, message);
     }
     return NextResponse.json({
       fallback: true,
-      reason: error?.message ?? "Unexpected TTS error",
+      reason: message,
     });
   }
 }

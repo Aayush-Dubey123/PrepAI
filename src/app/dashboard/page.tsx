@@ -14,7 +14,7 @@ export default function Dashboard() {
         <div className="space-y-2 text-center sm:text-left">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-mono tracking-wider text-zinc-300">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>INTERVIA CANDIDATE PORTAL</span>
+            <span>PREPAI CANDIDATE PORTAL</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Start Technical Interview

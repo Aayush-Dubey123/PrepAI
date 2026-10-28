@@ -90,9 +90,10 @@ export function logLLMStartupTable() {
   console.log("======================================\n");
 }
 
-// Trigger startup log once on module load
-try { logLLMStartupTable(); } catch {}
-
+// Only log in development when explicitly enabled via LLM_VERBOSE=true
+if (process.env.NODE_ENV !== "production" && process.env.LLM_VERBOSE === "true" && !process.env.NEXT_PHASE) {
+  try { logLLMStartupTable(); } catch {}
+}
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 /**
@@ -158,10 +159,11 @@ async function generateSequential(
 
       attempts.push({ provider: model.provider, model: model.id, outcome: "success", latencyMs: Date.now() - start });
       return result;
-    } catch (err: any) {
-      attempts.push({ provider: model.provider, model: model.id, outcome: "error", latencyMs: Date.now() - start, error: err?.message });
-      lastError = err;
-      console.warn(`[LLM] Sequential: ${model.provider}/${model.id} failed, trying next. ${err?.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      attempts.push({ provider: model.provider, model: model.id, outcome: "error", latencyMs: Date.now() - start, error: message });
+      lastError = err instanceof Error ? err : new Error(message);
+      console.warn(`[LLM] Sequential: ${model.provider}/${model.id} failed, trying next. ${message}`);
     }
   }
 
@@ -291,11 +293,10 @@ async function validateAndRetry(
     `[LLM] JSON schema validation failed after retry: ${retryParsed.error}`,
   );
 }
-
-export function tryParseAndValidate(
+export function tryParseAndValidate<T>(
   text: string,
-  schema: z.ZodTypeAny,
-): { ok: true; data: unknown } | { ok: false; error: string } {
+  schema: z.ZodType<T>,
+): { ok: true; data: T } | { ok: false; error: string } {
   let cleanText = text.trim();
   // Strip markdown code fences if present (e.g. ```json ... ```)
   cleanText = cleanText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();

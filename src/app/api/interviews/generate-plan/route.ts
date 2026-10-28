@@ -5,7 +5,6 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { z, ZodError } from "zod";
-import type { ExtractedResume } from "@/src/schemas/resume";
 import {
   DEFAULT_INTERVIEW_PLAN,
 } from "@/src/lib/default-interview-plan";

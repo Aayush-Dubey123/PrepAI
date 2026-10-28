@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const { userId } = await auth();
 
     // Retrieve interview IDs tracked in cookie
-    const cookieHeader = req.cookies.get("intervia_interview_ids")?.value ?? "";
+    const cookieHeader = req.cookies.get("prepai_interview_ids")?.value ?? req.cookies.get("intervia_interview_ids")?.value ?? "";
     const cookieInterviewIds = cookieHeader
       .split(",")
       .map((id) => id.trim())
@@ -31,7 +31,16 @@ export async function GET(req: NextRequest) {
       conditions.push(inArray(interviews.id, cookieInterviewIds));
     }
 
-    let userInterviews = [];
+    let userInterviews: Array<{
+      id: string;
+      jobRole: string;
+      status: string | null;
+      score: number | null;
+      currentPhase: string | null;
+      totalTurns: number | null;
+      feedback: unknown;
+      createdAt: Date | null;
+    }> = [];
 
     if (conditions.length > 0) {
       userInterviews = await db
@@ -49,8 +58,7 @@ export async function GET(req: NextRequest) {
         .where(conditions.length === 1 ? conditions[0] : or(...conditions))
         .orderBy(desc(interviews.createdAt))
         .limit(50);
-    } else {
-      // In local dev without user ID or cookies, return recent 50 interviews
+    } else if (process.env.NODE_ENV !== "production" && process.env.DEV_MOCK_ALL_INTERVIEWS === "true") {
       userInterviews = await db
         .select({
           id: interviews.id,
@@ -71,10 +79,11 @@ export async function GET(req: NextRequest) {
       success: true,
       interviews: userInterviews,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("[GET_INTERVIEWS_ERROR]", error);
     return NextResponse.json(
-      { error: "Failed to fetch interview history", message: error.message },
+      { error: "Failed to fetch interview history", message: errorMessage },
       { status: 500 },
     );
   }
