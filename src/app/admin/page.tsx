@@ -275,31 +275,31 @@ export default function AdminDashboardPage() {
     }));
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#fafafa] font-sans selection:bg-violet-500 selection:text-white pb-16">
+    <div className="min-h-screen bg-[#f4f6fa] text-[#0f172a] font-sans pb-16">
       {/* Header Bar */}
-      <header className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-xl border-b border-white/10 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+      <header className="sticky top-0 z-50 h-14 bg-white/90 backdrop-blur-xl border-b border-[#e2e8f0] px-4 sm:px-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-white/10 transition-all"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 border border-[#e2e8f0] text-xs font-semibold text-[#334155] hover:text-[#0f172a] hover:bg-slate-200 transition-all"
           >
             <ArrowLeft size={14} />
             <span>Dashboard</span>
           </Link>
-          <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
+          <div className="h-4 w-[1px] bg-[#e2e8f0] hidden sm:block" />
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
+            <div className="w-8 h-8 rounded-lg bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
               <Shield size={16} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xs font-bold text-white uppercase tracking-wider">Shadcn UI Analytics Dashboard</h1>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-mono text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <h1 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Analytics & Telemetry Console</h1>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[9px] font-mono text-emerald-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   RESTRICTED
                 </span>
               </div>
-              <p className="text-[10px] text-zinc-400 font-mono">PrepAI Recharts Telemetry v1.0</p>
+              <p className="text-[10px] text-[#94a3b8] font-mono">PrepAI System Telemetry</p>
             </div>
           </div>
         </div>
@@ -335,9 +335,9 @@ export default function AdminDashboardPage() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6" ref={reportRef}>
-        {/* Navigation Tabs Bar (Shadcn UI style) */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-          <div className="flex items-center gap-1 bg-[#141417] p-1 rounded-xl border border-white/10 overflow-x-auto no-scrollbar">
+        {/* Navigation Tabs Bar */}
+        <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
+          <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-xl border border-[#e2e8f0] overflow-x-auto no-scrollbar">
             {[
               { id: "overview", label: "Platform Overview", icon: <Layers size={14} /> },
               { id: "scoring", label: "Scoring & Hiring", icon: <BarChart3 size={14} /> },
@@ -348,10 +348,11 @@ export default function AdminDashboardPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === tab.id
-                    ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
-                  }`}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "bg-white text-[#0f172a] font-bold shadow-xs border border-[#e2e8f0]"
+                    : "text-[#64748b] hover:text-[#0f172a]"
+                }`}
               >
                 {tab.icon}
                 <span>{tab.label}</span>

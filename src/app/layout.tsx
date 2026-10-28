@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/src/components/header";
 import { CookieConsent } from "@/src/components/cookie-consent";
+import { ToastProvider } from "@/src/components/ui/ToastProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,12 +27,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#08090c] text-[#fafafa]`}>
+    <html lang="en">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#f4f6fa] text-[#0f172a]`}>
         <ClerkProvider>
-          <Header />
-          {children}
-          <CookieConsent />
+          <ToastProvider>
+            <Header />
+            {children}
+            <CookieConsent />
+          </ToastProvider>
         </ClerkProvider>
       </body>
     </html>

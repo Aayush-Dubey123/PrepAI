@@ -1,1592 +1,200 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
-import { IntegrityDetector } from "@/src/lib/integrity/detector";
-import { INTEGRITY_CONFIG } from "@/src/lib/integrity/config";
-import type { IntegrityEvent } from "@/src/schemas/integrity";
-import LatticeLoader from "@/src/components/ui/LatticeLoader";
+import { useState, useCallback } from "react";
+import { useParams } from "next/navigation";
+import { useWebcamStream } from "@/src/hooks/useWebcamStream";
+import { useAudioPlayback } from "@/src/hooks/useAudioPlayback";
+import { useSpeechInput } from "@/src/hooks/useSpeechInput";
+import { useSilenceNudge } from "@/src/hooks/useSilenceNudge";
+import { useIntegrityMonitor } from "@/src/hooks/useIntegrityMonitor";
+import { useTurnOrchestrator } from "@/src/hooks/useTurnOrchestrator";
 
-type TurnState = "idle" | "ai_speaking" | "user_turn" | "processing";
+import { InterviewHeader } from "@/src/components/interview-room/InterviewHeader";
+import { InterviewerTile } from "@/src/components/interview-room/InterviewerTile";
+import { CandidateTile } from "@/src/components/interview-room/CandidateTile";
+import { InterviewControls } from "@/src/components/interview-room/InterviewControls";
+import { TranscriptDrawer } from "@/src/components/interview-room/TranscriptDrawer";
+import { IntegrityAlertBanner } from "@/src/components/interview-room/IntegrityAlertBanner";
+import { EndInterviewModal } from "@/src/components/interview-room/EndInterviewModal";
 
-// Speech Recognition types
-type SpeechRecognitionEvent = {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-};
-
-type SpeechRecognitionErrorEvent = {
-  error: string;
-  message: string;
-};
-
-type TranscriptEntry = {
-  id: string;
-  speaker: "ai" | "user";
-  text: string;
-  timestamp: Date;
-};
-
-type TranscriptChunkRecord = {
-  id: string;
-  interviewId: string;
-  content: string;
-  speaker: "user" | "ai";
-  createdAt: string | Date | null;
-};
-
-type InterviewRecord = {
-  id: string;
-  jobRole: string;
-  status: string;
-  currentPhase: string;
-  feedback: {
-    candidateProfile?: {
-      fullName: string;
-      topSkills: string[];
-      yearsOfExperience: number;
-      coreProjects: Array<{ title: string; description: string }>;
-    };
-  };
-};
-
-type TurnResponse = {
-  say: string;
-  phase: "intro" | "warmup" | "core" | "wrapup" | "closing";
-  isComplete: boolean;
-  _dev?: {
-    evaluation?: Record<string, unknown>;
-    decision?: Record<string, unknown>;
-    provider: string;
-    latencyMs: number;
-    action: string;
-  };
-};
-
-// Phase display mapping (server 5-phase → UI label)
-const PHASE_LABELS: Record<string, string> = {
-  intro: "Getting Started",
-  warmup: "Getting to Know You",
-  core: "Technical Round",
-  wrapup: "Wrapping Up",
-  closing: "Complete",
-  // legacy DB phases (if loaded from old rows)
-  greeting: "Getting Started",
-  rapport: "Getting to Know You",
-  technical: "Technical Round",
-  closed: "Complete",
-};
-
-function mapChunkToEntry(chunk: TranscriptChunkRecord): TranscriptEntry {
-  return {
-    id: chunk.id,
-    speaker: chunk.speaker,
-    text: chunk.content,
-    timestamp: chunk.createdAt ? new Date(chunk.createdAt) : new Date(),
-  };
-}
-
-
-export default function InterviewRoomPage() {
+export default function InterviewStagePage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const interviewId = params.id;
 
-  const [turnState, setTurnState] = useState<TurnState>("idle");
-  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
-  const [userInput, setUserInput] = useState("");
-  const [transcriptError, setTranscriptError] = useState<string | null>(null);
-  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
-  const [supportsSpeechRecognition] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
-    return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
-  });
-  const [isListening, setIsListening] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState("");
-
-  // Interview brain state (server-owned: phase, turns)
-  const [isAiThinking, setIsAiThinking] = useState(false);
-  const [aiProvider, setAiProvider] = useState<string>("gemini");
-  const [ttsProvider, setTtsProvider] = useState<"browser" | "sarvam">("sarvam");
-  const [currentPhase, setCurrentPhase] = useState<string>("intro");
-  const [, setCandidateProfile] = useState<unknown>(null);
-
-  const recognitionRef = useRef<unknown>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [showTranscriptPanel, setShowTranscriptPanel] = useState(true);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
-  const [isCameraOn, setIsCameraOn] = useState(true);
-  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [showSilenceHint, setShowSilenceHint] = useState(false);
-  const [jobRole, setJobRole] = useState("Software Developer");
+  const [isEndingSession, setIsEndingSession] = useState(false);
 
-  // Integrity monitoring state
-  const [integrityStrikes, setIntegrityStrikes] = useState(0);
-  const [integrityWarning, setIntegrityWarning] = useState<string | null>(null);
-  const [isTerminatedByIntegrity, setIsTerminatedByIntegrity] = useState(false);
-  const [showDevOverlay, setShowDevOverlay] = useState(false);
-  const [integrityDebug, setIntegrityDebug] = useState<{ yaw: number; pitch: number; gazeAway: boolean; faceCount: number; detectedObjects: string[] } | null>(null);
-  const integrityDetectorRef = useRef<IntegrityDetector | null>(null);
-
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const isAttemptingOrchestratorRef = useRef(false);
-  const isEndingRef = useRef(false);
-  const startListeningRef = useRef<() => void>(() => {});
-  const stopListeningRef = useRef<() => void>(() => {});
-
-  // Elapsed timer effect
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // ── Camera: acquire stream once on mount ────────────────────────────────────
-  useEffect(() => {
-    let isMounted = true;
-    let acquiredStream: MediaStream | null = null;
-
-    const startWebcam = async () => {
-      try {
-        setCameraError(null);
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        if (!isMounted) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        acquiredStream = stream;
-        setMediaStream(stream);
-        // srcObject is set in the dedicated effect below
-      } catch (err: unknown) {
-        if (!isMounted) return;
-        console.warn("[WEBCAM] getUserMedia error:", err);
-        const errorObj = err as { name?: string };
-        let msg = "Camera access denied";
-        if (errorObj?.name === "NotAllowedError") msg = "Camera permission denied. Click the camera icon in your browser's address bar to allow access.";
-        else if (errorObj?.name === "NotFoundError") msg = "No camera found. Please connect a camera and refresh.";
-        else if (errorObj?.name === "NotReadableError") msg = "Camera is in use by another application. Please close it and try again.";
-        setCameraError(msg);
-        setIsCameraOn(false);
-      }
-    };
-
-    startWebcam();
-
-    return () => {
-      isMounted = false;
-      if (acquiredStream) {
-        acquiredStream.getTracks().forEach((t) => t.stop());
-      }
-    };
-    // Only run once on mount — not when isCameraOn toggles
-  }, []);
-
-  // ── Camera: attach srcObject AFTER the video element mounts ─────────────────
-  const snapshotCapturedRef = useRef(false);
-  const captureCandidateSnapshot = useCallback(() => {
-    if (!videoRef.current || !interviewId) return;
-    const video = videoRef.current;
-    if (video.videoWidth === 0 || video.videoHeight === 0) return;
-
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.min(video.videoWidth, 640);
-      canvas.height = Math.min(video.videoHeight, 480);
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-        fetch(`/api/interviews/${interviewId}/snapshot`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: dataUrl }),
-        }).catch((err) => console.warn("[SNAPSHOT] Upload error:", err));
-      }
-    } catch (e) {
-      console.warn("[SNAPSHOT] Capture failed:", e);
-    }
-  }, [interviewId]);
-
-  useEffect(() => {
-    if (videoRef.current && mediaStream) {
-      videoRef.current.srcObject = mediaStream;
-      videoRef.current.play().catch((e) =>
-        console.warn("[WEBCAM] play() failed:", e),
-      );
-
-      if (!snapshotCapturedRef.current) {
-        const timer = setTimeout(() => {
-          captureCandidateSnapshot();
-          snapshotCapturedRef.current = true;
-        }, 2500);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [mediaStream, captureCandidateSnapshot]);
-
-  // Stop all active AI speech immediately (Barge-in / Interruption)
-  const stopAiSpeech = useCallback(() => {
-    if (activeAudioRef.current) {
-      try {
-        activeAudioRef.current.pause();
-        activeAudioRef.current.currentTime = 0;
-      } catch {}
-      activeAudioRef.current = null;
-    }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
-    }
-  }, []);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        (recognitionRef.current as { stop: () => void }).stop();
-      } catch {}
-      setIsListening(false);
-    }
-  }, []);
-
-  const endInterviewSession = useCallback(async (reason: "manual" | "natural" | "integrity" | "cap_reached") => {
-    if (isEndingRef.current) return;
-    isEndingRef.current = true;
-    console.log(`[END_SESSION] Terminating interview session (${reason}) for ${interviewId}`);
-
-    stopAiSpeech();
-    stopListening();
-
-    if (integrityDetectorRef.current) {
-      try {
-        integrityDetectorRef.current.stop();
-      } catch {}
-    }
-
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((t) => t.stop());
-      setMediaStream(null);
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    setIsGeneratingFeedback(true);
-    setTurnState("idle");
-    setCurrentPhase("closed");
-
-    try {
-      fetch(`/api/interviews/${interviewId}/feedback/generate`, {
-        method: "POST",
-      }).catch((e) => console.warn("[END_SESSION] Feedback trigger error (non-critical):", e));
-    } catch {}
-
-    router.push(`/interview/${interviewId}/feedback`);
-  }, [interviewId, mediaStream, stopAiSpeech, stopListening, router]);
-
-  const generateFeedback = useCallback(async () => {
-    await endInterviewSession("natural");
-  }, [endInterviewSession]);
-
-  // ── Integrity Monitoring: Start detector ────────────────────────────────────
-  useEffect(() => {
-    if (!videoRef.current || !mediaStream || !interviewId) return;
-
-    let detector: IntegrityDetector | null = null;
-
-    const startDetector = async () => {
-      detector = new IntegrityDetector({
-        onViolation: async (event: IntegrityEvent) => {
-          console.warn("[INTEGRITY_VIOLATION]", event);
-          try {
-            // Client-side dedup: suppress same event type within 2s
-            const dedupKey = `integrity_dedup_${event.type}`;
-            const lastSent = parseInt(sessionStorage.getItem(dedupKey) ?? "0", 10);
-            if (Date.now() - lastSent < 2000) {
-              console.log("[INTEGRITY] Client dedup suppressed:", event.type);
-              return;
-            }
-            sessionStorage.setItem(dedupKey, String(Date.now()));
-
-            // Queue to sessionStorage for resilience across retries
-            const queueKey = `integrity_queue_${interviewId}`;
-            const queue: IntegrityEvent[] = JSON.parse(sessionStorage.getItem(queueKey) ?? "[]");
-            queue.push(event);
-            sessionStorage.setItem(queueKey, JSON.stringify(queue));
-
-            // Retry loop: up to 3 attempts with exponential backoff
-            let res: Response | null = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-              if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * attempt));
-              try {
-                res = await fetch(`/api/interviews/${interviewId}/integrity`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(event),
-                });
-                if (res.status === 429) {
-                  const rd = await res.json().catch(() => ({})) as { retryAfterSec?: number };
-                  const wait = (rd.retryAfterSec ?? 10) * 1000;
-                  console.warn(`[INTEGRITY] 429, backing off ${wait}ms`);
-                  await new Promise((r) => setTimeout(r, wait));
-                  continue;
-                }
-                break;
-              } catch {
-                continue; // network error — retry
-              }
-            }
-
-            if (res?.ok) {
-              // Remove from queue on success
-              const remaining: IntegrityEvent[] = JSON.parse(sessionStorage.getItem(queueKey) ?? "[]")
-                .filter((e: IntegrityEvent) => !(e.type === event.type && e.timestamp === event.timestamp));
-              sessionStorage.setItem(queueKey, JSON.stringify(remaining));
-
-              const data = await res.json();
-              if (data.success && !data.deduplicated) {
-                setIntegrityStrikes(data.strikeNumber);
-                setIntegrityWarning(
-                  `⚠️ Integrity Warning: Sustained ${event.type.replace("_", " ").toUpperCase()} detected (${data.strikeNumber}/${INTEGRITY_CONFIG.maxStrikes} strikes)`
-                );
-                if (typeof window !== "undefined" && window.speechSynthesis) {
-                  const warnAudio = new SpeechSynthesisUtterance("Notice: Please keep your eyes on the screen during the interview.");
-                  window.speechSynthesis.speak(warnAudio);
-                }
-                if (data.isTerminated) {
-                  setIsTerminatedByIntegrity(true);
-                  setCurrentPhase("closed");
-                  setTimeout(() => { void endInterviewSession("integrity"); }, 3000);
-                } else {
-                  setTimeout(() => { setIntegrityWarning(null); }, 6000);
-                }
-              }
-            } else {
-              console.warn("[INTEGRITY] Event queued (will retry on next violation):", event.type);
-            }
-          } catch (err) {
-            console.error("[INTEGRITY_API_ERROR]", err);
-          }
-        },
-        onDebugFrame: (data) => {
-          setIntegrityDebug(data);
-        },
-      });
-
-      const initialized = await detector.initialize();
-      if (initialized && videoRef.current) {
-        const calStr = localStorage.getItem(`integrity_calibration_${interviewId}`);
-        if (calStr) {
-          try {
-            detector.setBaseline(JSON.parse(calStr));
-          } catch {}
-        }
-        detector.start(videoRef.current);
-        integrityDetectorRef.current = detector;
-      }
-    };
-
-    startDetector();
-
-    return () => {
-      detector?.stop();
-      detector?.close();
-    };
-  }, [interviewId, mediaStream, router, endInterviewSession]);
-
-  useEffect(() => {
-    integrityDetectorRef.current?.setAiSpeaking(turnState === "ai_speaking");
-  }, [turnState]);
-
-  // Prevent accidental navigation/refresh mid-interview
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (currentPhase !== "closed" && currentPhase !== "closing") {
-        e.preventDefault();
-        e.returnValue = "An interview is currently in progress. Are you sure you want to leave?";
-        return e.returnValue;
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [currentPhase]);
-
-  // ── Camera: toggle tracks enabled without stopping (instant on/off) ──────────
-  useEffect(() => {
-    if (!mediaStream) return;
-    mediaStream.getVideoTracks().forEach((t) => {
-      t.enabled = isCameraOn;
-    });
-  }, [isCameraOn, mediaStream]);
-
-  // Auto-scroll transcript
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [transcript, isAiThinking, interimTranscript]);
-
-  // Keyboard shortcut for mic (M key) — uses refs to avoid hoisting issue
-  const isListeningRef = useRef(false);
-  const turnStateRef = useRef<TurnState>("idle");
-
-  useEffect(() => {
-    isListeningRef.current = isListening;
-  }, [isListening]);
-
-  useEffect(() => {
-    turnStateRef.current = turnState;
-  }, [turnState]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-      if (e.key === "m" || e.key === "M") {
-        e.preventDefault();
-        if (isListeningRef.current) {
-          stopListeningRef.current();
-        } else if (turnStateRef.current === "user_turn") {
-          startListeningRef.current();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const isAiSpeaking = turnState === "ai_speaking";
-
-  // Latency eval helper (gated behind NEXT_PUBLIC_RESEARCH_MODE === "true")
-  const sendClientLatencyLog = useCallback((stage: "candidate_speech_end" | "audio_playback_start", turnNum?: number) => {
-    if (process.env.NEXT_PUBLIC_RESEARCH_MODE !== "true") return;
-    const ts = Date.now();
-    console.log(`[EVAL_LATENCY] stage=${stage} ts=${ts}`);
-    fetch("/api/eval/latency", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        interviewId,
-        turnId: turnNum ?? transcript.length + 1,
-        stage,
-        ts,
-      }),
-    }).catch(() => { });
-  }, [interviewId, transcript.length]);
-
-  // Silence detection effect for candidate turn
-  useEffect(() => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-    if (turnState === "user_turn") {
-      silenceTimerRef.current = setTimeout(() => {
-        console.log("[SILENCE DETECT] Candidate silent for > 12s, showing nudge hint");
-        setShowSilenceHint(true);
-      }, 12000);
-    }
-
-    return () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    };
-  }, [turnState, userInput]);
-
-  const appendTranscript = useCallback(
-    async (content: string, speaker: "user" | "ai") => {
-      if (!interviewId) {
-        throw new Error("Missing interview session id");
-      }
-
-      const payload = { interviewId, content, speaker };
-      console.log("[TRANSCRIPT APPEND] Payload:", payload);
-
-      const response = await fetch("/api/interviews/transcript/append", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-      console.log("[TRANSCRIPT APPEND] Response:", data);
-
-      if (!response.ok) {
-        throw new Error(
-          typeof data.error === "string"
-            ? data.error
-            : "Failed to persist transcript",
-        );
-      }
-
-      const entry = mapChunkToEntry(data as TranscriptChunkRecord);
-      setTranscript((prev) => [...prev, entry]);
-      return entry;
+  // 1. Audio Playback Controller (Barge-in + Sarvam/Browser TTS)
+  const { isAiSpeaking, speakText, stopAiSpeech } = useAudioPlayback({
+    onLatencyLog: (stage) => {
+      orchestrator.sendClientLatencyLog(stage);
     },
-    [interviewId],
+  });
+
+  // 2. Webcam Stream Controller (Invariant: mediaStream acquired ONCE; toggle alters visibility only)
+  const { videoRef, mediaStream, isCameraOn, setIsCameraOn } = useWebcamStream({
+    interviewId,
+    enableSnapshot: true,
+  });
+
+  // Handle AI speech request from orchestrator
+  const handleAiSpeakRequested = useCallback(
+    async (say: string) => {
+      await speakText(say);
+    },
+    [speakText]
   );
 
+  // 3. Turn Progression Orchestrator
+  const orchestrator = useTurnOrchestrator({
+    interviewId,
+    onAiSpeakRequested: handleAiSpeakRequested,
+    onStopAiSpeech: stopAiSpeech,
+    mediaStream,
+  });
 
-  const speakWithSarvam = useCallback(async (text: string, onAudioStart?: () => void) => {
-    const response = await fetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, speaker: "ritu" }),
-    });
+  // 4. Speech Recognition Controller (Invariant: explicit user initiation via button or [M]; instantaneous barge-in)
+  const {
+    isListening,
+    interimTranscript,
+    startListening,
+    stopListening,
+    supportsSpeechRecognition,
+  } = useSpeechInput({
+    onFinalTranscript: (text) => {
+      void orchestrator.submitAnswer(text);
+    },
+    onBargeIn: stopAiSpeech,
+    enabled: orchestrator.turnState === "user_turn",
+  });
 
-    if (!response.ok) {
-      throw new Error(`TTS proxy endpoint returned status ${response.status}`);
-    }
+  // 5. Silence Nudge Controller (Invariant: 12-second inactivity hint, NEVER auto-submits)
+  const { showSilenceHint } = useSilenceNudge({
+    turnState: orchestrator.turnState,
+    userInput: orchestrator.userInput,
+    timeoutMs: 12000,
+  });
 
-    const data = await response.json();
-    if (data.fallback || !data.audios || data.audios.length === 0) {
-      throw new Error(data.reason || "TTS proxy requested fallback to browser TTS");
-    }
+  // 6. Integrity Proctoring Controller (Invariant: 3 strikes auto-termination)
+  const handleIntegrityTerminate = useCallback(() => {
+    void orchestrator.endSession("integrity");
+  }, [orchestrator]);
 
-    // Sequentially play audio chunks with barge-in support
-    let chunkIdx = 0;
-    for (const audioBase64 of data.audios) {
-      const audioBytes = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
-      const audioBlob = new Blob([audioBytes], { type: "audio/wav" });
-      const audioUrl = URL.createObjectURL(audioBlob);
+  const { strikes, warning, isTerminated } = useIntegrityMonitor({
+    interviewId,
+    mediaStream,
+    videoRef,
+    turnState: orchestrator.turnState,
+    onTerminate: handleIntegrityTerminate,
+  });
 
-      const audio = new Audio(audioUrl);
-      activeAudioRef.current = audio;
-
-      await new Promise<void>((resolve, reject) => {
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          if (activeAudioRef.current === audio) {
-            activeAudioRef.current = null;
-          }
-          resolve();
-        };
-        audio.onerror = () => {
-          URL.revokeObjectURL(audioUrl);
-          if (activeAudioRef.current === audio) {
-            activeAudioRef.current = null;
-          }
-          reject(new Error("Audio playback failed"));
-        };
-        audio.oncanplaythrough = () => {
-          if (activeAudioRef.current === audio) {
-            if (chunkIdx === 0 && onAudioStart) {
-              onAudioStart();
-            }
-            sendClientLatencyLog("audio_playback_start");
-            audio.play().catch(reject);
-          }
-        };
-      });
-      chunkIdx++;
-    }
-  }, [sendClientLatencyLog]);
-
-  const speakWithBrowserTTS = useCallback(async (text: string, onAudioStart?: () => void) => {
-    // Use real TTS if available
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1;
-      utterance.pitch = 0.9;
-
-      let voices = window.speechSynthesis.getVoices();
-      if (voices.length === 0) {
-        await new Promise<void>((resolve) => {
-          const loadVoices = () => {
-            voices = window.speechSynthesis.getVoices();
-            if (voices.length > 0) {
-              window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
-              resolve();
-            }
-          };
-          window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-          setTimeout(() => {
-            window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
-            resolve();
-          }, 1000);
-        });
-      }
-
-      const maleVoice = voices.find(voice =>
-        voice.lang.startsWith('en') &&
-        (voice.name.toLowerCase().includes('male') ||
-          voice.name.toLowerCase().includes('david') ||
-          voice.name.toLowerCase().includes('mark') ||
-          voice.name.toLowerCase().includes('james') ||
-          voice.name.toLowerCase().includes('daniel'))
-      ) || voices.find(voice => voice.lang.startsWith('en'));
-
-      if (maleVoice) {
-        utterance.voice = maleVoice;
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        utterance.onstart = () => {
-          if (onAudioStart) onAudioStart();
-        };
-        utterance.onend = () => resolve();
-        utterance.onerror = () => reject(new Error("Browser TTS failed"));
-        window.speechSynthesis.speak(utterance);
-      });
+  // Controls Handlers
+  const handleToggleMic = () => {
+    if (isListening) {
+      stopListening();
     } else {
-      throw new Error("Browser TTS not supported");
+      startListening();
     }
-  }, []);
-  const speakAiQuestion = useCallback(
-    async (questionText: string) => {
-      console.log("[SPEAK AI] Question text:", questionText);
-      if (!questionText || questionText.trim().length === 0) {
-        console.error("[SPEAK AI] Empty question text provided");
-        throw new Error("Cannot speak empty question");
-      }
-
-      setTurnState("ai_speaking");
-      let textAppended = false;
-
-      const triggerTextDisplay = async () => {
-        if (!textAppended) {
-          textAppended = true;
-          setIsAiThinking(false);
-          await appendTranscript(questionText, "ai");
-        }
-      };
-
-      // Try Sarvam TTS first if enabled
-      if (ttsProvider === "sarvam") {
-        try {
-          await speakWithSarvam(questionText, triggerTextDisplay);
-          await triggerTextDisplay();
-          setTurnState("user_turn");
-          return;
-        } catch (error) {
-          console.warn("[SPEAK AI] Sarvam TTS failed, falling back to browser TTS:", error);
-          setTtsProvider("browser");
-        }
-      }
-
-      // Fallback to browser TTS
-      await speakWithBrowserTTS(questionText, triggerTextDisplay);
-      await triggerTextDisplay();
-      setTurnState("user_turn");
-    },
-    [ttsProvider, appendTranscript, speakWithSarvam, speakWithBrowserTTS],
-  );
-
-  /**
-   * callTurn: post the user's latest utterance + last-N transcript to /api/interviews/[id]/turn.
-   * Receives explicit `userUtterance` + `updatedTranscript` to avoid stale closure bugs.
-   */
-  const callTurn = useCallback(async (
-    userUtterance: string,
-    updatedTranscript: TranscriptEntry[],
-    customRequestId?: string,
-  ) => {
-    if (!interviewId) return;
-    if (isAttemptingOrchestratorRef.current) {
-      console.log("[TURN] Already in flight, skipping duplicate");
-      return;
-    }
-
-    isAttemptingOrchestratorRef.current = true;
-    setIsAiThinking(true);
-
-    // Safe requestId: interviewId + transcript length + short djb2 hash (no raw utterance in logs)
-    const h = userUtterance.split('').reduce((acc, c) => (Math.imul(31, acc) + c.charCodeAt(0)) | 0, 0).toString(36).replace('-', '').slice(-6);
-    const clientRequestId = customRequestId || `${interviewId}_t${updatedTranscript.length}_${h}`;
-
-    // Build last-6-turns for context (explicit, not from stale state)
-    const recentTranscript = updatedTranscript.slice(-12).map((e) => ({
-      speaker: e.speaker,
-      content: e.text,
-    }));
-
-    const payload = { userUtterance, recentTranscript, clientRequestId };
-    console.log("[TURN] Calling /turn, reqId:", clientRequestId, "utterance:", userUtterance.slice(0, 80));
-
-    // Helper: single fetch attempt
-    const attemptFetch = async () => fetch(`/api/interviews/${interviewId}/turn`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    try {
-      let response = await attemptFetch();
-      console.log("[TURN] Response status:", response.status);
-
-      // If we get a 429, wait Retry-After and retry ONCE — never discard the answer
-      if (response.status === 429) {
-        const data = await response.json().catch(() => ({})) as { retryAfterSec?: number; error?: string };
-        const waitSec = data.retryAfterSec ?? 5;
-        console.warn(`[TURN] 429 — retrying in ${waitSec}s (answer preserved)`);
-        setTranscriptError(`One moment — retrying in ${waitSec}s…`);
-        await new Promise((r) => setTimeout(r, waitSec * 1000));
-        setTranscriptError(null);
-        response = await attemptFetch();
-        console.log("[TURN] Retry response status:", response.status);
-      }
-
-      if (response.status === 409) {
-        console.log("[TURN] Interview already ended on server (409). Navigating to feedback report.");
-        setIsAiThinking(false);
-        setCurrentPhase("closing");
-        await generateFeedback();
-        return;
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Turn failed: ${response.status} — ${errorText}`);
-      }
-
-      const turnResp = await response.json() as TurnResponse;
-      console.log("[TURN] Response:", turnResp);
-
-      // Update UI phase from server truth
-      setCurrentPhase(turnResp.phase);
-      if (turnResp._dev?.provider) setAiProvider(turnResp._dev.provider);
-
-      setIsAiThinking(false);
-
-      if (turnResp.isComplete) {
-        await generateFeedback();
-      } else {
-        await speakAiQuestion(turnResp.say);
-      }
-    } catch (error) {
-      console.error("[TURN] Error:", error);
-      setIsAiThinking(false);
-      // Preserve the candidate's answer in the transcript — it's already appended
-      setTranscriptError("Couldn't reach the AI — your answer was saved. Tap to retry.");
-      setTurnState("user_turn");
-    } finally {
-      isAttemptingOrchestratorRef.current = false;
-    }
-  }, [interviewId, speakAiQuestion, generateFeedback]);
-
-  // Check for speech recognition support on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.getVoices();
-    }
-  }, []);
-
-  const hasPlayedInitialGreetingRef = useRef(false);
-
-  useEffect(() => {
-    if (!interviewId) return;
-
-    // Validate interview ID format (UUID)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(interviewId)) {
-      console.error("[LOAD SESSION] Invalid interview ID format:", interviewId);
-      setTimeout(() => {
-        setTranscriptError("Invalid interview ID. Please start a new interview from the home page.");
-        setTurnState("idle");
-        router.push("/");
-      }, 0);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadSession() {
-      setTurnState("processing");
-      setTranscriptError(null);
-
-      console.log("[LOAD SESSION] Loading interview:", interviewId);
-
-      try {
-        const response = await fetch(
-          `/api/interviews/transcript?interviewId=${interviewId}`,
-        );
-
-        console.log("[LOAD SESSION] Response status:", response.status);
-
-        if (response.status === 404) {
-          throw new Error("Interview not found. Please start a new interview from the home page.");
-        }
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            typeof data.error === "string"
-              ? data.error
-              : "Failed to load interview session",
-          );
-        }
-
-        if (cancelled) return;
-
-        const interview = data.interview as InterviewRecord;
-        const chunks = (data.chunks ?? []) as TranscriptChunkRecord[];
-
-        console.log("[LOAD SESSION] Loaded interview:", interview.id, "Phase:", interview.currentPhase);
-
-        setJobRole(interview?.jobRole ?? "Software Developer");
-        setCurrentPhase(interview?.currentPhase || "intro");
-        setCandidateProfile(interview?.feedback?.candidateProfile || null);
-
-        const entries = chunks.map(mapChunkToEntry);
-        setTranscript(entries);
-
-        // Derive state strictly from saved transcript data
-        if (entries.length === 0) {
-          // Empty transcript -> play greeting & wait for candidate
-          const firstName = interview?.feedback?.candidateProfile?.fullName?.split(" ")[0] || "there";
-          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today. Before we begin, is there anything you'd like to check on your end — audio, video, anything like that?`;
-          if (!hasPlayedInitialGreetingRef.current) {
-            hasPlayedInitialGreetingRef.current = true;
-            await speakAiQuestion(defaultGreeting);
-          } else {
-            setTurnState("user_turn");
-          }
-          return;
-        }
-
-        const lastEntry = entries[entries.length - 1];
-        if (lastEntry.speaker === "ai") {
-          // Last entry is AI -> wait for candidate turn
-          setTurnState("user_turn");
-          // Play initial greeting audio on first load if it's entry 1 and hasn't played yet
-          if (entries.length === 1 && !hasPlayedInitialGreetingRef.current) {
-            hasPlayedInitialGreetingRef.current = true;
-            // Speak without re-appending to transcript since it's already in DB
-            if (ttsProvider === "sarvam") {
-              try {
-                await speakWithSarvam(lastEntry.text);
-              } catch {
-                await speakWithBrowserTTS(lastEntry.text);
-              }
-            } else {
-              await speakWithBrowserTTS(lastEntry.text);
-            }
-          }
-        } else {
-          // Last entry is user -> generate reply once using idempotency key
-          setTurnState("processing");
-          const lastUserUtterance = lastEntry.text;
-          const resumeReqId = `${interviewId}_resume_${entries.length}`;
-          void callTurn(lastUserUtterance, entries, resumeReqId);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("[LOAD SESSION] Error:", error);
-          setTranscriptError(
-            error instanceof Error
-              ? `Failed to load interview session: ${error.message}. Please refresh the page or try starting a new interview.`
-              : "Failed to load interview session. Please refresh the page or try starting a new interview.",
-          );
-          setTurnState("idle");
-        }
-      }
-    }
-
-    void loadSession();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [interviewId, router, callTurn, speakAiQuestion, speakWithSarvam, speakWithBrowserTTS, ttsProvider]);
-
-  // NOTE: callTurn is now called DIRECTLY from handleSpeak with explicit args.
-  // No effects fire the AI turn — this eliminates the stale-closure and re-greeting bugs.
-
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [transcript]);
-
-
-  const handleSpeak = useCallback(async (text?: string) => {
-    const finalText = (text || userInput).trim();
-    if (!finalText || turnState !== "user_turn") return;
-
-    sendClientLatencyLog("candidate_speech_end");
-
-    setUserInput("");
-    setInterimTranscript("");
-    setTranscriptError(null);
-    setTurnState("processing");
-
-    try {
-      // 1. Persist user utterance and get the updated entry back
-      const newEntry = await appendTranscript(finalText, "user");
-      // 2. Build updated transcript array with the NEW entry included
-      const updatedTranscript = [...transcript, newEntry];
-      // 3. Call /turn with the user's utterance + fresh transcript — no stale state
-      await callTurn(finalText, updatedTranscript);
-    } catch (error) {
-      setTranscriptError(
-        error instanceof Error
-          ? `Failed to send your response: ${error.message}. Please try again or use text input.`
-          : "Failed to send your response. Please try again or use text input.",
-      );
-      setTurnState("user_turn");
-    }
-  }, [userInput, turnState, sendClientLatencyLog, appendTranscript, transcript, callTurn]);
-
-  const startListening = useCallback(() => {
-    if (!supportsSpeechRecognition || isListening) return;
-
-    // Barge-in: Stop active AI speech when user starts listening/speaking
-    stopAiSpeech();
-
-    const speechWindow = window as unknown as { SpeechRecognition?: new () => unknown; webkitSpeechRecognition?: new () => unknown };
-    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    const recognition = new SpeechRecognition() as {
-      continuous: boolean;
-      interimResults: boolean;
-      lang: string;
-      onstart: () => void;
-      onresult: (event: SpeechRecognitionEvent) => void;
-      onerror: (event: SpeechRecognitionErrorEvent) => void;
-      onend: () => void;
-      start: () => void;
-      stop: () => void;
-    };
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      setInterimTranscript("");
-    };
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const { resultIndex, results } = event;
-      const currentResult = results[resultIndex];
-
-      if (currentResult.isFinal) {
-        const finalText = currentResult[0].transcript;
-        setUserInput(finalText);
-        setInterimTranscript("");
-        setIsListening(false);
-        void handleSpeak(finalText);
-      } else {
-        setInterimTranscript(currentResult[0].transcript);
-      }
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      setInterimTranscript("");
-
-      switch (event.error) {
-        case 'not-allowed':
-          setTranscriptError('Microphone permission denied. Using text input fallback.');
-          break;
-        case 'no-speech':
-          setTranscriptError('No speech detected. Please try again or use text input.');
-          break;
-        case 'aborted':
-          break;
-        case 'network':
-          setTranscriptError('Network error during speech recognition. Using text input fallback.');
-          break;
-        case 'audio-capture':
-          setTranscriptError('Microphone not available. Using text input fallback.');
-          break;
-        default:
-          setTranscriptError(`Speech recognition error: ${event.error}. Using text input fallback.`);
-      }
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [supportsSpeechRecognition, isListening, stopAiSpeech, handleSpeak]);
-  useEffect(() => {
-    startListeningRef.current = startListening;
-    stopListeningRef.current = stopListening;
-  }, [startListening, stopListening]);
-
-
-  const formatTimer = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const handleToggleCamera = () => {
+    // Invariant: Modifies visibility only; underlying MediaStream tracks remain active for MediaPipe
+    setIsCameraOn((prev) => !prev);
+  };
+
+  const handleQuickPrompt = (promptText: string) => {
+    stopAiSpeech();
+    void orchestrator.submitAnswer(promptText);
+  };
+
+  const handleConfirmEndInterview = async () => {
+    setIsEndingSession(true);
+    await orchestrator.endSession("manual");
+  };
+
+  const candidateName =
+    orchestrator.candidateProfile?.fullName?.split(" ")[0] || "Candidate";
+
   return (
-    <div className="h-dvh w-full overflow-hidden flex flex-col bg-zinc-950 text-zinc-100 font-sans select-none">
-      {/* Top Bar */}
-      <header className="h-14 shrink-0 px-4 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600/20 text-purple-400 font-bold text-sm">
-            AI
-          </div>
-          <div>
-            <h1 className="text-sm font-semibold text-zinc-200 leading-none">
-              {jobRole}
-            </h1>
-            <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
-              ID: {interviewId?.slice(0, 8)}…
-            </p>
-          </div>
+    <div className="h-dvh w-full overflow-hidden flex flex-col bg-[#09090b] text-[#fafafa] font-sans select-none relative">
+      {/* 1. Header Ribbon */}
+      <InterviewHeader
+        jobRole={orchestrator.jobRole}
+        currentPhase={orchestrator.currentPhase}
+        elapsedSeconds={orchestrator.elapsedSeconds}
+        strikes={strikes}
+        maxStrikes={3}
+        onEndCall={() => setShowEndModal(true)}
+        aiProvider={orchestrator.aiProvider}
+      />
+
+      {/* 2. Integrity Strike Alert Banner */}
+      <IntegrityAlertBanner warning={warning} isTerminated={isTerminated} />
+
+      {/* 3. Main Stage: Twin Tile Layout */}
+      <main className="flex-1 min-h-0 p-3 sm:p-6 flex flex-col justify-between overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch min-h-0 mb-4">
+          {/* Left Tile: AI Interviewer */}
+          <InterviewerTile
+            turnState={orchestrator.turnState}
+            isAiThinking={orchestrator.isAiThinking}
+            aiProvider={orchestrator.aiProvider}
+          />
+
+          {/* Right Tile: Candidate Camera & Feed */}
+          <CandidateTile
+            videoRef={videoRef}
+            candidateName={candidateName}
+            isCameraOn={isCameraOn}
+            isListening={isListening}
+            showSilenceHint={showSilenceHint}
+            mediaStream={mediaStream}
+          />
         </div>
 
-        {/* Center Timer & Progress */}
-        <div className="flex items-center gap-4 bg-zinc-950/60 border border-zinc-800/80 rounded-full px-4 py-1.5 text-xs">
-          <div className="flex items-center gap-1.5 text-zinc-300 font-mono">
-            <svg className="w-3.5 h-3.5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{formatTimer(elapsedSeconds)}</span>
-          </div>
-          <div className="h-3 w-[1px] bg-zinc-800" />
-          <div className="font-semibold text-purple-400">
-            {PHASE_LABELS[currentPhase] ?? currentPhase}
-          </div>
+        {/* 4. Bottom Controls Dock */}
+        <div className="shrink-0 z-20">
+          <InterviewControls
+            isListening={isListening}
+            isCameraOn={isCameraOn}
+            isAiSpeaking={isAiSpeaking}
+            onToggleMic={handleToggleMic}
+            onToggleCamera={handleToggleCamera}
+            onToggleTranscript={() => setIsTranscriptOpen((prev) => !prev)}
+            isTranscriptOpen={isTranscriptOpen}
+            onQuickPrompt={handleQuickPrompt}
+            onEndCall={() => setShowEndModal(true)}
+            supportsSpeechRecognition={supportsSpeechRecognition}
+          />
         </div>
+      </main>
 
-        {/* Right Status Pill & Provider */}
-        <div className="flex items-center gap-2">
-          {/* Unobtrusive Integrity Indicator */}
-          <span
-            onClick={() => setShowDevOverlay((prev) => !prev)}
-            className={`cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${integrityStrikes > 0
-                ? "bg-amber-950/40 border-amber-500/50 text-amber-300"
-                : "bg-emerald-950/30 border-emerald-500/30 text-emerald-400"
-              }`}
-            title="Click to toggle dev-only vision overlay"
-          >
-            <span className={`h-2 w-2 rounded-full ${integrityStrikes > 0 ? "bg-amber-400 animate-ping" : "bg-emerald-400 animate-pulse"}`} />
-            {integrityStrikes > 0 ? `⚠️ Integrity (${integrityStrikes}/${INTEGRITY_CONFIG.maxStrikes})` : "● Integrity Active"}
-          </span>
+      {/* 5. Slide-Over Transcript Drawer */}
+      <TranscriptDrawer
+        isOpen={isTranscriptOpen}
+        onClose={() => setIsTranscriptOpen(false)}
+        transcript={orchestrator.transcript}
+        interimTranscript={interimTranscript}
+        userInput={orchestrator.userInput}
+        onUserInputChange={orchestrator.setUserInput}
+        onSubmit={(text) => {
+          stopAiSpeech();
+          void orchestrator.submitAnswer(text);
+        }}
+        turnState={orchestrator.turnState}
+        isAiThinking={orchestrator.isAiThinking}
+        onBargeIn={stopAiSpeech}
+        transcriptError={orchestrator.transcriptError}
+      />
 
-          <span className="hidden sm:inline-flex text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/50">
-            {aiProvider}
-          </span>
-          <span
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border ${isAiThinking
-                ? "bg-amber-950/40 border-amber-500/50 text-amber-300 animate-pulse"
-                : isAiSpeaking
-                  ? "bg-purple-950/40 border-purple-500/50 text-purple-300"
-                  : turnState === "user_turn"
-                    ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-300"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-400"
-              }`}
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${isAiThinking
-                  ? "bg-amber-400 animate-ping"
-                  : isAiSpeaking
-                    ? "bg-purple-400 animate-ping"
-                    : turnState === "user_turn"
-                      ? "bg-emerald-400 animate-pulse"
-                      : "bg-zinc-500"
-                }`}
-            />
-            {isAiThinking
-              ? "AI Thinking"
-              : isAiSpeaking
-                ? "AI Speaking"
-                : turnState === "user_turn"
-                  ? "Listening"
-                  : "Idle"}
-          </span>
-        </div>
-      </header>
-
-      {/* Integrity Warning Banner */}
-      {integrityWarning && (
-        <div className="bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 text-xs text-amber-200 flex items-center justify-between z-20 shadow-md">
-          <div className="flex items-center gap-2">
-            <ShieldAlert size={16} className="text-amber-400 shrink-0" />
-            <span className="font-semibold">{integrityWarning}</span>
-          </div>
-          <button onClick={() => setIntegrityWarning(null)} className="text-amber-400 hover:text-amber-200 text-xs font-medium">
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Dev-Only Vision Overlay */}
-      {showDevOverlay && integrityDebug && (
-        <div className="fixed bottom-16 left-4 z-50 bg-black/90 border border-purple-500/50 p-3 rounded-xl backdrop-blur-md text-[11px] font-mono text-zinc-300 space-y-1 shadow-2xl">
-          <div className="font-bold text-purple-400 border-b border-zinc-800 pb-1 flex justify-between gap-4">
-            <span>Dev Vision Overlay</span>
-            <button onClick={() => setShowDevOverlay(false)} className="text-zinc-500 hover:text-zinc-300">✕</button>
-          </div>
-          <div>Head Yaw: <span className="text-white">{integrityDebug.yaw}°</span> (Max: {INTEGRITY_CONFIG.thresholds.yawMaxDegrees}°)</div>
-          <div>Head Pitch: <span className="text-white">{integrityDebug.pitch}°</span> (Max: {INTEGRITY_CONFIG.thresholds.pitchMaxDegrees}°)</div>
-          <div>Gaze Away: <span className={integrityDebug.gazeAway ? "text-amber-400 font-bold" : "text-emerald-400"}>{integrityDebug.gazeAway ? "YES" : "NO"}</span></div>
-          <div>Faces Count: <span className="text-white">{integrityDebug.faceCount}</span></div>
-          <div>Strikes Recorded: <span className="text-amber-400 font-bold">{integrityStrikes} / {INTEGRITY_CONFIG.maxStrikes}</span></div>
-        </div>
-      )}
-
-      {/* Integrity Termination Modal */}
-      {isTerminatedByIntegrity && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 select-none">
-          <div className="max-w-md w-full bg-zinc-900 border border-rose-500/40 rounded-2xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="h-12 w-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/30">
-              <ShieldAlert size={28} />
-            </div>
-            <h2 className="text-xl font-bold text-white">Interview Session Ended</h2>
-            <p className="text-xs text-zinc-300">
-              Integrity warnings were recorded during this session. The interview has been ended gracefully. Your answers provided so far have been saved and evaluated.
-            </p>
-            <div className="pt-2 text-xs text-purple-400 animate-pulse font-medium">Redirecting to report overview…</div>
-          </div>
-        </div>
-      )}
-
-      {transcriptError && (
-        <div
-          role="alert"
-          className="border-b border-red-900/50 bg-red-950/40 px-4 py-2 text-xs text-red-300 shrink-0"
-        >
-          {transcriptError}
-        </div>
-      )}
-
-      {/* Main Content (Tiles + Collapsible Transcript) */}
-      <div className="flex-1 min-h-0 flex overflow-hidden p-3 gap-3">
-        {/* Tiles Grid */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* AI Interviewer Tile */}
-          <div
-            className={`relative min-h-0 rounded-2xl bg-zinc-900/90 border border-zinc-800/90 overflow-hidden flex flex-col items-center justify-center p-4 transition-all duration-300 ${isAiSpeaking
-                ? "ring-2 ring-purple-500/80 shadow-[0_0_25px_rgba(168,85,247,0.3)]"
-                : isAiThinking
-                  ? "ring-2 ring-amber-500/50"
-                  : ""
-              }`}
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(139,92,246,0.15)_0%,_transparent_70%)]" />
-
-            <div className="relative flex flex-col items-center gap-4 z-10">
-              <div
-                className={`relative flex h-28 w-28 sm:h-36 sm:w-36 items-center justify-center rounded-full border-2 bg-purple-950/70 transition-all ${isAiSpeaking
-                    ? "border-purple-300/80 shadow-[0_0_40px_rgba(168,85,247,0.4)] scale-105"
-                    : "border-purple-500/40"
-                  }`}
-              >
-                {isAiSpeaking && (
-                  <>
-                    <div className="absolute inset-0 animate-ping rounded-full bg-purple-500/20" />
-                    <div className="absolute -inset-3 animate-pulse rounded-full border border-purple-500/30" />
-                  </>
-                )}
-                <svg
-                  viewBox="0 0 64 64"
-                  className="relative h-14 w-14 sm:h-16 sm:w-16 text-purple-200"
-                  fill="currentColor"
-                >
-                  <circle cx="32" cy="22" r="12" opacity="0.9" />
-                  <path d="M12 58c0-11 9-20 20-20s20 9 20 20" opacity="0.7" />
-                </svg>
-              </div>
-
-              {/* Waveform / Visualizer */}
-              <div className="flex h-6 items-end gap-1" aria-label="AI speech activity">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className={`w-1 rounded-full transition-all ${isAiSpeaking
-                        ? "bg-purple-300"
-                        : isAiThinking
-                          ? "bg-amber-400/60"
-                          : "bg-purple-900/40"
-                      }`}
-                    style={{
-                      height: isAiSpeaking
-                        ? `${10 + (i % 6) * 4}px`
-                        : isAiThinking
-                          ? `${6 + (i % 4) * 3}px`
-                          : "6px",
-                      animation: isAiSpeaking
-                        ? `speechBar ${0.4 + (i % 4) * 0.15}s ease-in-out infinite alternate`
-                        : isAiThinking
-                          ? `speechBar 0.8s ease-in-out infinite alternate`
-                          : undefined,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Label Badge */}
-            <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 border border-zinc-800">
-              <span className={`h-2 w-2 rounded-full ${isAiSpeaking ? "bg-purple-400 animate-pulse" : "bg-zinc-500"}`} />
-              <span className="text-xs font-semibold text-zinc-200">AI Interviewer</span>
-            </div>
-          </div>
-
-          {/* Candidate Tile */}
-          <div
-            className={`relative min-h-0 rounded-2xl bg-zinc-900/90 border border-zinc-800/90 overflow-hidden flex flex-col items-center justify-center p-4 transition-all duration-300 ${turnState === "user_turn" && isListening
-                ? "ring-2 ring-emerald-500/80 shadow-[0_0_25px_rgba(16,185,129,0.3)]"
-                : ""
-              }`}
-          >
-            {/* Always-mounted video element — visibility toggled to avoid srcObject race */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`absolute inset-0 h-full w-full object-cover transform -scale-x-100 rounded-2xl z-0 transition-opacity duration-300 ${isCameraOn && mediaStream ? "opacity-100" : "opacity-0 pointer-events-none"
-                }`}
-            />
-
-            {/* Gradient overlay when webcam is active */}
-            {isCameraOn && mediaStream && (
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20 z-10 pointer-events-none" />
-            )}
-
-            {/* Background gradient when camera is off */}
-            {(!isCameraOn || !mediaStream) && (
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(14,165,233,0.15)_0%,_transparent_70%)]" />
-            )}
-
-            {/* Avatar Placeholder when Camera is Off */}
-            {(!isCameraOn || !mediaStream) && (
-              <div className="relative flex flex-col items-center gap-4 z-10">
-                <div
-                  className={`relative flex h-28 w-28 sm:h-36 sm:w-36 items-center justify-center rounded-full border-2 bg-emerald-950/70 transition-all ${turnState === "user_turn" && isListening
-                      ? "border-emerald-300/80 shadow-[0_0_40px_rgba(16,185,129,0.4)] scale-105"
-                      : "border-emerald-500/40"
-                    }`}
-                >
-                  {turnState === "user_turn" && isListening && (
-                    <>
-                      <div className="absolute inset-0 animate-ping rounded-full bg-emerald-500/20" />
-                      <div className="absolute -inset-3 animate-pulse rounded-full border border-emerald-500/30" />
-                    </>
-                  )}
-                  <svg
-                    viewBox="0 0 64 64"
-                    className="relative h-14 w-14 sm:h-16 sm:w-16 text-emerald-200"
-                    fill="currentColor"
-                  >
-                    <circle cx="32" cy="22" r="12" opacity="0.9" />
-                    <path d="M12 58c0-11 9-20 20-20s20 9 20 20" opacity="0.7" />
-                  </svg>
-                </div>
-
-                {/* Speech visualizer */}
-                <div className="flex h-6 items-end gap-1" aria-label="Candidate speech activity">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <span
-                      key={i}
-                      className={`w-1 rounded-full transition-all ${isListening ? "bg-emerald-300" : "bg-emerald-900/40"
-                        }`}
-                      style={{
-                        height: isListening ? `${10 + (i % 6) * 4}px` : "6px",
-                        animation: isListening
-                          ? `speechBar ${0.4 + (i % 4) * 0.15}s ease-in-out infinite alternate`
-                          : undefined,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Floating Speech Visualizer Overlay when Camera is On */}
-            {isCameraOn && mediaStream && (
-              <div className="absolute bottom-12 left-3 z-20 flex h-6 items-end gap-1 bg-zinc-950/70 backdrop-blur-md px-2.5 py-1 rounded-lg border border-zinc-800/80">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className={`w-1 rounded-full transition-all ${isListening ? "bg-emerald-400" : "bg-zinc-600"
-                      }`}
-                    style={{
-                      height: isListening ? `${8 + (i % 5) * 3}px` : "4px",
-                      animation: isListening
-                        ? `speechBar ${0.4 + (i % 3) * 0.15}s ease-in-out infinite alternate`
-                        : undefined,
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Silence Nudge Badge when Candidate is Silent */}
-            {showSilenceHint && turnState === "user_turn" && (
-              <div className="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-lg bg-amber-950/80 border border-amber-500/40 px-3 py-1.5 text-xs text-amber-200 backdrop-blur-md animate-bounce">
-                <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-                <span>Listening... Take your time! Feel free to answer or ask for a hint.</span>
-              </div>
-            )}
-
-            {/* Label Badge */}
-            <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg bg-zinc-950/80 backdrop-blur-md px-3 py-1.5 border border-zinc-800">
-              <span
-                className={`h-2 w-2 rounded-full ${isCameraOn && mediaStream
-                    ? "bg-emerald-400 animate-pulse"
-                    : isListening
-                      ? "bg-emerald-400 animate-pulse"
-                      : "bg-amber-400"
-                  }`}
-              />
-              <span className="text-xs font-semibold text-zinc-200">
-                You (Candidate) {isCameraOn && mediaStream ? "" : "• Cam Off"}
-              </span>
-            </div>
-
-            {/* Camera error toast / notice */}
-            {cameraError && (
-              <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg bg-rose-950/80 border border-rose-800/80 px-2.5 py-1 text-[11px] text-rose-300 backdrop-blur-md">
-                <span>Camera unavailable</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Collapsible Transcript Panel */}
-        {showTranscriptPanel && (
-          <aside className="w-80 lg:w-96 shrink-0 flex flex-col min-h-0 rounded-2xl bg-zinc-900/95 border border-zinc-800 overflow-hidden shadow-2xl z-20">
-            <div className="h-11 shrink-0 border-b border-zinc-800 px-4 flex items-center justify-between bg-zinc-900/90">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
-                  Live Transcript
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTranscriptPanel(false)}
-                className="text-zinc-500 hover:text-zinc-300 p-1 rounded-md hover:bg-zinc-800 transition-colors"
-                title="Hide Transcript"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Scrollable messages */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-              {transcript.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-center p-6 text-zinc-500 text-xs">
-                  {turnState === "processing"
-                    ? "Initializing session..."
-                    : isAiThinking
-                      ? "AI is thinking..."
-                      : "Transcript will appear here in real-time."}
-                </div>
-              ) : (
-                transcript.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={`flex flex-col gap-1 ${entry.speaker === "user" ? "items-end" : "items-start"}`}
-                  >
-                    <span className="text-[10px] font-semibold text-zinc-500 px-1">
-                      {entry.speaker === "ai" ? "AI Interviewer" : "Candidate"}
-                    </span>
-                    <div
-                      className={`max-w-[90%] rounded-xl px-3.5 py-2 text-xs leading-relaxed ${entry.speaker === "ai"
-                          ? "bg-purple-950/50 text-purple-100 border border-purple-800/40"
-                          : "bg-emerald-950/50 text-emerald-100 border border-emerald-800/40"
-                        }`}
-                    >
-                      {entry.text}
-                    </div>
-                  </div>
-                ))
-              )}
-
-              {isAiThinking && (
-                <div className="flex flex-col gap-1 items-start py-1 px-1">
-                  <span className="text-[10px] font-semibold text-zinc-400 px-0.5">AI Interviewer</span>
-                  <LatticeLoader
-                    status="working"
-                    label="Thinking"
-                    pattern="orbit"
-                    grid={3}
-                    shape="round"
-                    color="#ffffff"
-                    doneColor="#22c55e"
-                    errorColor="#ef4444"
-                    cellSize={4}
-                    gap={1.5}
-                    fontSize={11}
-                    step={90}
-                    showTimer={true}
-                  />
-                </div>
-              )}
-              <div ref={transcriptEndRef} />
-            </div>
-
-            {/* Input Footer */}
-            <div className="shrink-0 border-t border-zinc-800 bg-zinc-950/80 p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void handleSpeak();
-                    }
-                  }}
-                  disabled={turnState !== "user_turn"}
-                  placeholder={
-                    turnState === "user_turn"
-                      ? "Type answer or press [M] to speak..."
-                      : "Waiting for AI..."
-                  }
-                  className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-purple-500/50 disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleSpeak()}
-                  disabled={!userInput.trim() || turnState !== "user_turn"}
-                  className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-40 transition-colors"
-                >
-                  Send
-                </button>
-              </div>
-            </div>
-          </aside>
-        )}
-      </div>
-
-      {/* Bottom Control Bar */}
-      <footer className="h-16 shrink-0 bg-zinc-900/95 border-t border-zinc-800 px-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px] border border-zinc-700">M</kbd>
-          <span className="hidden sm:inline">Press M to toggle mic</span>
-        </div>
-
-        {/* Center Controls */}
-        <div className="flex items-center gap-3">
-          {/* Mic Button */}
-          <button
-            type="button"
-            onClick={isListening ? stopListening : startListening}
-            disabled={turnState !== "user_turn"}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${isListening
-                ? "bg-red-600 hover:bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]"
-                : turnState === "user_turn"
-                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-                  : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-              }`}
-            title="Toggle Mic (Key M)"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-            </svg>
-            <span>{isListening ? "Mute Mic" : "Unmute Mic"}</span>
-          </button>
-
-          {/* Camera Button Placeholder */}
-          <button
-            type="button"
-            onClick={() => setIsCameraOn(!isCameraOn)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${isCameraOn
-                ? "bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700"
-                : "bg-red-950/40 border-red-800/40 text-red-300"
-              }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            <span className="hidden sm:inline">{isCameraOn ? "Cam On" : "Cam Off"}</span>
-          </button>
-
-          {/* Captions / Transcript Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowTranscriptPanel(!showTranscriptPanel)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${showTranscriptPanel
-                ? "bg-purple-950/50 border-purple-700 text-purple-300"
-                : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
-              }`}
-            title="Toggle Transcript Drawer"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-            <span className="hidden sm:inline">Transcript</span>
-          </button>
-
-          {/* End Interview */}
-          <button
-            type="button"
-            onClick={() => setShowEndModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white transition-all shadow-[0_0_15px_rgba(239,68,68,0.3)]"
-          >
-            <span>End Call</span>
-          </button>
-        </div>
-
-        <div className="text-xs text-zinc-500">
-          <span className="hidden sm:inline">Zoom Style Call</span>
-        </div>
-      </footer>
-
-      {/* End Confirmation Modal */}
-      {showEndModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-zinc-100">End Interview?</h3>
-            <p className="text-xs text-zinc-400 mt-2">
-              Are you sure you want to exit? Your transcript will be saved and AI feedback will be generated.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowEndModal(false)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEndModal(false);
-                  void generateFeedback();
-                }}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500"
-              >
-                End & Get Feedback
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {/* Generating Feedback Overlay */}
-      {isGeneratingFeedback && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
-          <div className="text-center">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-purple-500/30 border-t-purple-500 mx-auto mb-4" />
-            <p className="text-lg font-medium text-white">Generating Interview Feedback...</p>
-            <p className="text-sm text-zinc-400 mt-2">AI is analyzing your responses</p>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes speechBar {
-          from { transform: scaleY(0.4); opacity: 0.5; }
-          to { transform: scaleY(1); opacity: 1; }
-        }
-      `}</style>
+      {/* 6. End Interview Confirmation Modal */}
+      <EndInterviewModal
+        isOpen={showEndModal}
+        onClose={() => setShowEndModal(false)}
+        onConfirm={handleConfirmEndInterview}
+        isSubmitting={isEndingSession}
+      />
     </div>
   );
 }

@@ -2,62 +2,223 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { ChevronRight, ShieldCheck, LogOut, Sparkles, BarChart3, LayoutDashboard, Brain } from "lucide-react";
+import { Badge } from "@/src/components/ui/Badge";
+import { Button } from "@/src/components/ui/Button";
 
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const [showAbout, setShowAbout] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
-  // Render navbar strictly on the hero page ("/") only
-  if (pathname !== "/") {
+  // 1. Marketing Mode: strictly root ("/")
+  const isMarketing = pathname === "/";
+
+  // 2. Live Interview Stage: /interview/[id] (NOT lobby, NOT feedback)
+  // To avoid duplicate headers, the live stage page renders its own specialized InterviewHeader.
+  const isLobby = pathname.endsWith("/lobby");
+  const isFeedback = pathname.endsWith("/feedback");
+  const isLiveStage =
+    pathname.startsWith("/interview/") && !isLobby && !isFeedback;
+
+  if (isLiveStage || pathname === "/admin" || pathname === "/dashboard") {
+    // Return null to prevent duplicate headers on live stage, admin, and dashboard cockpit
     return null;
   }
 
+  // Extract interview session ID if on feedback or lobby
+  const interviewIdMatch = pathname.match(/\/interview\/([^/]+)/);
+  const interviewId = interviewIdMatch ? interviewIdMatch[1] : null;
+
+  // Lobby Header Mode
+  if (isLobby) {
+    return (
+      <>
+        <header className="sticky top-0 z-40 h-14 w-full bg-white/90 backdrop-blur-md border-b border-[#e2e8f0] px-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="flex items-center gap-2.5 group">
+              <div className="w-8 h-8 rounded-xl bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5] transition-transform group-hover:scale-105">
+                <Brain className="w-4 h-4" />
+              </div>
+              <span className="font-bold text-sm text-[#0f172a] tracking-tight">
+                PrepAI
+              </span>
+            </Link>
+            <div className="h-4 w-px bg-[#e2e8f0] hidden sm:block" />
+            <span className="text-xs text-[#64748b] font-medium hidden sm:inline-flex items-center gap-1.5">
+              Pre-Flight Hardware Calibration
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Badge variant="purple" pulse className="px-2.5 py-0.5 text-xs font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Proctored
+            </Badge>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowExitConfirm(true)}
+              className="text-[#64748b] hover:text-rose-600 hover:bg-rose-50 gap-1.5 h-8 text-xs font-medium"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Exit to Dashboard</span>
+            </Button>
+          </div>
+        </header>
+
+        {showExitConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+            <div className="relative w-full max-w-md bg-white border border-[#e2e8f0] rounded-2xl p-6 shadow-2xl space-y-4">
+              <h3 className="text-lg font-bold text-[#0f172a]">Exit Calibration?</h3>
+              <p className="text-xs text-[#64748b] leading-relaxed">
+                Are you sure you want to exit? Your session is saved and you can return to it anytime from your dashboard.
+              </p>
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowExitConfirm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    setShowExitConfirm(false);
+                    router.push("/dashboard");
+                  }}
+                >
+                  Confirm Exit
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // App Mode Header (for other app pages)
+  if (!isMarketing) {
+    return (
+      <header className="sticky top-0 z-40 h-14 w-full bg-white/90 backdrop-blur-md border-b border-[#e2e8f0] px-4 sm:px-8 flex items-center justify-between">
+        {/* Left: Brand + Breadcrumbs */}
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Link href="/dashboard" className="flex items-center gap-2.5 group shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5] transition-transform group-hover:scale-105">
+              <Brain className="w-4 h-4" />
+            </div>
+            <span className="font-bold text-sm sm:text-base text-[#0f172a] tracking-tight">
+              PrepAI
+            </span>
+          </Link>
+
+          <ChevronRight className="w-3.5 h-3.5 text-[#cbd5e1] shrink-0" />
+
+          {/* Interactive Breadcrumb */}
+          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium">
+            <Link
+              href="/dashboard"
+              className={
+                pathname === "/dashboard"
+                  ? "text-[#0f172a] font-bold"
+                  : "text-[#64748b] hover:text-[#0f172a] transition-colors"
+              }
+            >
+              Dashboard
+            </Link>
+
+            {isFeedback && interviewId && (
+              <>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
+                <span className="text-[#64748b] font-mono text-xs">
+                  #{interviewId.slice(0, 8)}
+                </span>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
+                <span className="text-[#4f46e5] font-semibold">Evaluation</span>
+              </>
+            )}
+
+            {pathname === "/admin" && (
+              <>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
+                <span className="text-[#4f46e5] font-semibold">Analytics Console</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Center/Right: Navigation links + Clerk UserButton */}
+        <div className="flex items-center gap-2 sm:gap-4 text-xs font-medium">
+          <Link
+            href="/dashboard"
+            className={`flex items-center gap-1.5 transition-colors px-2.5 py-1.5 rounded-lg ${
+              pathname === "/dashboard"
+                ? "bg-[#eef2ff] text-[#4f46e5] font-semibold"
+                : "text-[#64748b] hover:text-[#0f172a]"
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Dashboard</span>
+          </Link>
+
+          <Link
+            href="/admin"
+            className={`flex items-center gap-1.5 transition-colors px-2.5 py-1.5 rounded-lg ${
+              pathname === "/admin"
+                ? "bg-[#eef2ff] text-[#4f46e5] font-semibold"
+                : "text-[#64748b] hover:text-[#0f172a]"
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Analytics</span>
+          </Link>
+
+          <div className="h-4 w-px bg-[#e2e8f0] mx-1" />
+          <UserButton />
+        </div>
+      </header>
+    );
+  }
+
+  // Marketing Mode Header ("/")
   return (
     <>
-      <header className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-5xl rounded-full glass-nav px-5 py-2.5 flex items-center justify-between transition-all duration-300 shadow-2xl">
-        {/* Left Side: Logo Icon + Brand Name */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center transition-transform group-hover:scale-105 shadow-inner">
-            <svg
-              className="w-4.5 h-4.5 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <ellipse cx="12" cy="12" rx="9" ry="3" transform="rotate(30 12 12)" />
-              <ellipse cx="12" cy="12" rx="9" ry="3" transform="rotate(90 12 12)" />
-              <ellipse cx="12" cy="12" rx="9" ry="3" transform="rotate(150 12 12)" />
-              <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-            </svg>
+      <header className="sticky top-0 z-50 h-14 w-full bg-white/90 backdrop-blur-md border-b border-[#e2e8f0] px-4 sm:px-8 flex items-center justify-between">
+        {/* Brand */}
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-xl bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5] transition-transform group-hover:scale-105">
+            <Brain className="w-4 h-4" />
           </div>
-          <span className="font-semibold text-sm sm:text-base text-white tracking-tight">
+          <span className="font-bold text-sm sm:text-base text-[#0f172a] tracking-tight">
             PrepAI
           </span>
         </Link>
 
-        {/* Right Side: About & Authentication */}
-        <div className="flex items-center gap-5 text-xs sm:text-sm font-medium">
+        {/* Navigation & Auth */}
+        <div className="flex items-center gap-3 sm:gap-4 text-xs font-medium">
           <button
             type="button"
             onClick={() => setShowAbout(true)}
-            className="text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            className="text-[#64748b] hover:text-[#0f172a] transition-colors cursor-pointer px-2 py-1"
           >
             About
           </button>
 
           <Show when="signed-out">
             <SignInButton mode="modal">
-              <button className="text-zinc-300 hover:text-white transition-colors px-1 py-1">
+              <button className="text-[#334155] hover:text-[#0f172a] transition-colors px-2 py-1 cursor-pointer">
                 Sign In
               </button>
             </SignInButton>
             <SignUpButton mode="modal">
-              <button className="bg-white text-black font-semibold text-xs sm:text-sm rounded-full px-4.5 py-1.5 transition-all hover:bg-zinc-200 active:scale-95 shadow-md cursor-pointer">
+              <button className="bg-[#1e293b] text-white font-semibold text-xs rounded-full px-3.5 py-1.5 transition-all hover:bg-[#0f172a] active:scale-95 shadow-xs cursor-pointer">
                 Sign up
               </button>
             </SignUpButton>
@@ -66,9 +227,10 @@ export function Header() {
           <Show when="signed-in">
             <Link
               href="/dashboard"
-              className="text-zinc-300 hover:text-white transition-colors"
+              className="inline-flex items-center gap-1.5 bg-[#1e293b] text-white font-semibold text-xs rounded-full px-3.5 py-1.5 hover:bg-[#0f172a] transition-all cursor-pointer shadow-xs"
             >
-              Dashboard
+              <Sparkles className="w-3.5 h-3.5 text-[#818cf8]" />
+              <span>Cockpit</span>
             </Link>
             <UserButton />
           </Show>
@@ -78,63 +240,54 @@ export function Header() {
       {/* About Modal */}
       {showAbout && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4 animate-in fade-in duration-200"
           onClick={() => setShowAbout(false)}
         >
           <div
-            className="relative w-full max-w-lg glass-card rounded-2xl p-8 border border-white/10 text-zinc-100 shadow-2xl space-y-6"
+            className="relative w-full max-w-lg bg-white rounded-2xl p-6 border border-[#e2e8f0] text-[#0f172a] shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                  <svg
-                    className="w-4 h-4 text-white"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                  >
-                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                    <polyline points="2 17 12 22 22 17" />
-                    <polyline points="2 12 12 17 22 12" />
-                  </svg>
+            <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
+                  <Brain className="w-4 h-4" />
                 </div>
-                <h3 className="text-xl font-semibold text-white tracking-tight">
+                <h3 className="text-base font-bold text-[#0f172a] tracking-tight">
                   About PrepAI
                 </h3>
               </div>
               <button
                 onClick={() => setShowAbout(false)}
-                className="text-zinc-400 hover:text-white text-xl leading-none p-1"
+                className="text-[#64748b] hover:text-[#0f172a] text-xl leading-none p-1 cursor-pointer"
               >
                 &times;
               </button>
             </div>
 
-            <p className="text-sm text-zinc-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#475569] leading-relaxed">
               PrepAI is a Tier-1 autonomous technical interview platform powered by adaptive AI models.
               It conducts dynamic code evaluations, real-time voice & text technical dialogue, and instant candidate feedback loops.
             </p>
 
-            <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-1">
-                <div className="font-semibold text-white">Adaptive Evaluation</div>
-                <div className="text-zinc-400">Contextual multi-turn technical probing.</div>
+            <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
+              <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-1">
+                <div className="font-bold text-[#0f172a]">Adaptive Probing</div>
+                <div className="text-[#64748b] text-[11px]">Contextual multi-turn depth scaling.</div>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-1">
-                <div className="font-semibold text-white">Instant Scoring</div>
-                <div className="text-zinc-400">Comprehensive feedback and breakdown reports.</div>
+              <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-1">
+                <div className="font-bold text-[#0f172a]">Instant Scoring</div>
+                <div className="text-[#64748b] text-[11px]">Comprehensive feedback and breakdown reports.</div>
               </div>
             </div>
 
             <div className="flex justify-end pt-2">
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => setShowAbout(false)}
-                className="bg-white text-black font-semibold text-xs rounded-lg px-4 py-2 hover:bg-zinc-200 transition-colors"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </div>

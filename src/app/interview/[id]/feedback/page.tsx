@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
-  ShieldCheck,
-  ShieldAlert,
   Award,
   TrendingUp,
   FileText,
@@ -19,9 +18,18 @@ import {
   LayoutDashboard,
   HelpCircle,
   Download,
+  RotateCcw,
+  User,
+  ShieldCheck,
+  Cpu,
+  Target,
+  MessageSquare,
+  BookOpen,
 } from "lucide-react";
 import { generateFeedbackPdf } from "@/src/lib/pdf-export";
-
+import { Button } from "@/src/components/ui/Button";
+import { Badge } from "@/src/components/ui/Badge";
+import { Card, CardHeader, CardTitle } from "@/src/components/ui/Card";
 interface FeedbackData {
   overallScore: number;
   summary: string;
@@ -68,6 +76,7 @@ export default function InterviewFeedbackPage() {
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
   const [jobRole, setJobRole] = useState("Software Engineering");
   const [transcript, setTranscript] = useState<TranscriptChunk[]>([]);
+  const [candidateSnapshot, setCandidateSnapshot] = useState<string | null>(null);
   const [showTranscriptDrawer, setShowTranscriptDrawer] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Record<number, boolean>>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -88,14 +97,13 @@ export default function InterviewFeedbackPage() {
     if (!interviewId) return;
 
     let isMounted = true;
-    let pollInterval: NodeJS.Timeout | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
     let attempts = 0;
 
     async function fetchFeedback() {
       try {
         const res = await fetch(`/api/interviews/${interviewId}/feedback`);
         if (!res.ok) {
-          // If 404, trigger generate
           const genRes = await fetch(`/api/interviews/${interviewId}/feedback/generate`, {
             method: "POST",
           });
@@ -119,42 +127,46 @@ export default function InterviewFeedbackPage() {
           }
           if (pollInterval) clearInterval(pollInterval);
         } else {
-          // Polling if still generating
           attempts++;
-          if (attempts > 12) {
+          if (attempts > 20) {
+            if (pollInterval) clearInterval(pollInterval);
             if (isMounted) {
-              setError("Report generation took longer than expected. Please refresh.");
+              setError("Report generation timed out. Please refresh to try again.");
               setLoading(false);
             }
-            if (pollInterval) clearInterval(pollInterval);
           }
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Failed to load feedback report";
-        console.error("[FEEDBACK_PAGE_ERROR]", err);
-        if (isMounted && attempts >= 3) {
-          setError(message);
-          setLoading(false);
+        console.warn("[FEEDBACK_FETCH]", err);
+        attempts++;
+        if (attempts > 15) {
+          if (pollInterval) clearInterval(pollInterval);
+          if (isMounted) {
+            setError(err instanceof Error ? err.message : "Failed to load feedback report.");
+            setLoading(false);
+          }
         }
       }
     }
 
-    fetchFeedback();
+    void fetchFeedback();
     pollInterval = setInterval(fetchFeedback, 2500);
 
-    // Also fetch transcript for secondary drawer
     fetch(`/api/interviews/transcript?interviewId=${interviewId}`)
       .then((r) => r.json())
       .then((tData) => {
-        if (isMounted && tData.chunks) {
-          setTranscript(tData.chunks);
+        if (isMounted) {
+          if (tData.chunks) setTranscript(tData.chunks);
+          if (tData.interview?.candidateSnapshot) {
+            setCandidateSnapshot(tData.interview.candidateSnapshot);
+          }
         }
       })
-      .catch(() => { });
+      .catch(() => {});
 
     return () => {
       isMounted = false;
-      if (pollInterval) clearInterval(pollInterval);
+      clearInterval(pollInterval!);
     };
   }, [interviewId]);
 
@@ -165,44 +177,58 @@ export default function InterviewFeedbackPage() {
     }));
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 85) return "text-emerald-400 border-emerald-500/40 bg-emerald-950/20";
-    if (score >= 70) return "text-green-400 border-green-500/40 bg-green-950/20";
-    if (score >= 50) return "text-amber-400 border-amber-500/40 bg-amber-950/20";
-    return "text-rose-400 border-rose-500/40 bg-rose-950/20";
-  };
+  // Clamped duration calculation to prevent extreme numbers like 573m
+  const displayDuration = (() => {
+    const t0 = transcript[0]?.createdAt;
+    const tEnd = transcript[transcript.length - 1]?.createdAt;
+    if (transcript.length >= 2 && t0 && tEnd) {
+      const first = new Date(t0).getTime();
+      const last = new Date(tEnd).getTime();
+      const diffMin = Math.round((last - first) / 60000);
+      if (diffMin > 0 && diffMin <= 60) return diffMin;
+    }
+    const raw = feedback?.interviewDuration || 5;
+    return raw > 60 ? 15 : Math.max(raw, 5);
+  })();
 
-  const getRecommendationBadge = (rec: string) => {
+  const isEarlyConcluded =
+    (feedback?.overallScore === 0 && (feedback?.questionFeedback?.length ?? 0) === 0) ||
+    feedback?.summary?.includes("before any technical questions were answered");
+
+  const getRecommendationDetails = (rec: string) => {
+    if (isEarlyConcluded) {
+      return { label: "PRACTICE RUN (EARLY EXIT)", variant: "purple" as const };
+    }
     switch (rec) {
       case "strong_hire":
-        return { label: "STRONG HIRE", bg: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" };
+        return { label: "STRONG HIRE", variant: "success" as const };
       case "hire":
-        return { label: "HIRE", bg: "bg-green-500/20 text-green-300 border-green-500/40" };
+        return { label: "HIRE", variant: "success" as const };
       case "consider":
-        return { label: "CONSIDER", bg: "bg-amber-500/20 text-amber-300 border-amber-500/40" };
+        return { label: "CONSIDER", variant: "warning" as const };
       default:
-        return { label: "DO NOT HIRE", bg: "bg-rose-500/20 text-rose-300 border-rose-500/40" };
+        return { label: "REQUIRES PRACTICE", variant: "warning" as const };
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-zinc-100 flex flex-col items-center justify-center p-6 select-none">
-        <div className="max-w-md w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-8 text-center space-y-6 shadow-2xl backdrop-blur-md">
+      <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col items-center justify-center p-6 select-none">
+        <div className="max-w-md w-full rounded-2xl border border-white/10 bg-[#141417]/80 p-8 text-center space-y-6 shadow-2xl backdrop-blur-xl">
           <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
             <div className="absolute inset-0 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
             <Sparkles className="w-7 h-7 text-purple-400 animate-pulse" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white tracking-tight">Generating Performance Report...</h2>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Synthesizing your technical responses, adaptive depth progression, and grounded citations across all covered topics.
+            <h2 className="text-xl font-bold text-white tracking-tight">Generating Technical Evaluation...</h2>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Synthesizing adaptive turn progression, multi-turn citations, and rubric scores across all covered topics.
             </p>
           </div>
-          <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
             <div className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full w-2/3 animate-pulse" />
           </div>
-          <p className="text-[11px] text-zinc-500 font-mono">Session ID: {interviewId?.slice(0, 8)}…</p>
+          <p className="text-[11px] text-neutral-500 font-mono">Session ID: {interviewId?.slice(0, 8)}…</p>
         </div>
       </div>
     );
@@ -210,28 +236,24 @@ export default function InterviewFeedbackPage() {
 
   if (error || !feedback) {
     return (
-      <div className="min-h-screen bg-black text-zinc-100 flex flex-col items-center justify-center p-6 select-none">
-        <div className="max-w-md w-full bg-zinc-900 border border-rose-900/50 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-14 h-14 rounded-full bg-rose-950/60 border border-rose-800/50 flex items-center justify-center mx-auto text-rose-400">
+      <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col items-center justify-center p-6 select-none">
+        <div className="max-w-md w-full rounded-2xl border border-rose-500/30 bg-[#141417] p-8 text-center space-y-6 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-400">
             <AlertCircle size={28} />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white">Report Generation Notice</h2>
-            <p className="text-xs text-zinc-400">{error || "Could not retrieve feedback report."}</p>
+            <h2 className="text-xl font-bold text-white">Evaluation Notice</h2>
+            <p className="text-xs text-neutral-400">{error || "Could not retrieve feedback report."}</p>
           </div>
           <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold transition-colors"
-            >
+            <Button variant="primary" size="sm" onClick={() => window.location.reload()}>
               Retry
-            </button>
-            <Link
-              href="/dashboard"
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
-            >
-              <LayoutDashboard size={14} />
-              <span>Back to Dashboard</span>
+            </Button>
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <LayoutDashboard size={14} />
+                <span>Return to Cockpit</span>
+              </Button>
             </Link>
           </div>
         </div>
@@ -239,368 +261,471 @@ export default function InterviewFeedbackPage() {
     );
   }
 
-  const recBadge = getRecommendationBadge(feedback.hiringRecommendation);
+  const recBadge = getRecommendationDetails(feedback.hiringRecommendation);
+  const scorePercent = Math.min(100, Math.max(0, feedback.overallScore));
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-purple-500 selection:text-white">
+    <div className="h-[calc(100dvh-3.5rem)] bg-[#f4f6fa] text-[#0f172a] font-sans flex flex-col justify-between overflow-hidden select-none">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 px-4 sm:px-8 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 h-12 shrink-0 bg-white/90 backdrop-blur-md border-b border-[#e2e8f0] px-4 sm:px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white hover:border-zinc-700 transition-colors"
-          >
-            <ArrowLeft size={14} />
-            <span>Dashboard</span>
+          <Link href="/dashboard">
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7">
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Cockpit</span>
+            </Button>
           </Link>
-          <div className="h-4 w-[1px] bg-zinc-800 hidden sm:block" />
+          <div className="h-4 w-px bg-[#e2e8f0] hidden sm:block" />
           <div className="hidden sm:block">
-            <h1 className="text-xs font-semibold text-white uppercase tracking-wider">{jobRole}</h1>
-            <p className="text-[10px] text-zinc-500 font-mono">Interview Evaluation Report</p>
+            <h1 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">{jobRole}</h1>
+            <p className="text-[10px] text-[#94a3b8] font-mono">Performance Evaluation Report</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleDownloadPdf}
-            disabled={isExportingPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 hover:border-emerald-500/60 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+            isLoading={isExportingPdf}
+            className="text-xs h-7 gap-1 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
           >
-            <Download size={14} className="text-emerald-400" />
-            <span>{isExportingPdf ? "Exporting PDF..." : "Download PDF"}</span>
-          </button>
-          <button
+            <Download className="w-3 h-3" />
+            <span className="hidden sm:inline">Export PDF</span>
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setShowTranscriptDrawer(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white hover:border-zinc-700 transition-colors"
+            className="text-xs h-7 gap-1"
           >
-            <FileText size={14} className="text-purple-400" />
-            <span>View Transcript ({transcript.length})</span>
-          </button>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white shadow-lg shadow-purple-600/20 transition-all"
-          >
-            <LayoutDashboard size={14} />
-            <span>Dashboard</span>
-          </Link>
+            <FileText className="w-3 h-3 text-purple-400" />
+            <span>Transcript ({transcript.length})</span>
+          </Button>
         </div>
       </header>
 
-      {/* Main Report Container */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Hero Score & Recommendation Banner */}
-        <section className="bg-gradient-to-b from-zinc-900/90 to-zinc-950 border border-zinc-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Main Report Container - Viewport Fit with Scrollable Inner Content */}
+      <main className="flex-1 min-h-0 max-w-6xl w-full mx-auto p-3 sm:p-5 flex flex-col justify-between gap-3 overflow-hidden">
+        {/* Hero Score Card (Pinned Top) */}
+        <section className="shrink-0 relative rounded-2xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-xs overflow-hidden">
+          <div className="pointer-events-none absolute -right-12 -top-12 w-64 h-64 bg-[#e0e7ff]/40 rounded-full blur-3xl" />
+          <div className="pointer-events-none absolute -left-12 -bottom-12 w-64 h-64 bg-[#f0f9ff]/40 rounded-full blur-3xl" />
 
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
-            {/* Score Ring / Number */}
-            <div className="flex items-center gap-6">
-              <div
-                className={`w-28 h-28 sm:w-32 sm:h-32 rounded-2xl border-2 flex flex-col items-center justify-center p-2 shadow-inner ${getScoreColor(
-                  feedback.overallScore,
-                )}`}
-              >
-                <span className="text-3xl sm:text-4xl font-extrabold tracking-tight">{feedback.overallScore}</span>
-                <span className="text-[11px] font-semibold uppercase tracking-wider opacity-80 mt-0.5">out of 100</span>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wider border ${recBadge.bg}`}>
-                    {recBadge.label}
+          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Score Ring + Verdict */}
+            <div className="flex items-center gap-4 text-center sm:text-left">
+              {/* Circular Gauge */}
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center shrink-0">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle
+                    cx="50"
+                    className="stroke-[#e2e8f0]"
+                    strokeWidth="8"
+                    fill="transparent"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="40"
+                    className="stroke-[#4f46e5] transition-all duration-1000 ease-out"
+                    strokeWidth="8"
+                    strokeDasharray={251}
+                    strokeDashoffset={251 - (251 * (isEarlyConcluded ? 35 : scorePercent)) / 100}
+                    strokeLinecap="round"
+                    fill="transparent"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-xl sm:text-2xl font-extrabold text-[#0f172a] tracking-tight">
+                    {isEarlyConcluded ? "—" : feedback.overallScore}
                   </span>
-                  <span className="flex items-center gap-1 text-xs text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-full border border-zinc-800">
-                    <Clock size={12} className="text-zinc-500" />
-                    <span>{feedback.interviewDuration || 15} mins duration</span>
+                  <span className="text-[9px] uppercase font-mono text-[#64748b] font-medium">
+                    {isEarlyConcluded ? "Practice" : "/ 100"}
                   </span>
                 </div>
-                <h2 className="text-lg sm:text-xl font-bold text-white">{jobRole} Technical Assessment</h2>
-                <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
-                  Evaluated with adaptive depth ladders, grounded transcript citations, and objective scoring.
+              </div>
+
+              {/* Verdict & Role Info */}
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={recBadge.variant} pulse className="text-[11px] font-bold px-2.5 py-0.5">
+                    {recBadge.label}
+                  </Badge>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-[#64748b] bg-[#f1f5f9] px-2 py-0.5 rounded-full border border-[#e2e8f0]">
+                    <Clock className="w-3 h-3 text-[#94a3b8]" />
+                    <span>{displayDuration}m active duration</span>
+                  </span>
+                </div>
+                <h2 className="text-base sm:text-lg font-bold text-[#0f172a] tracking-tight">
+                  {jobRole} Technical Evaluation
+                </h2>
+                <p className="text-xs text-[#64748b] max-w-md line-clamp-2">
+                  {isEarlyConcluded
+                    ? "Preliminary practice assessment. Answer full multi-turn questions in your next round to calibrate deep competency ratings."
+                    : "Objective score computed from grounded citations, code answers, and architectural depth ladders."}
                 </p>
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                disabled={isExportingPdf}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
-              >
-                <Download size={16} />
-                <span>{isExportingPdf ? "Generating PDF..." : "Download PDF Report"}</span>
-              </button>
-              <Link
-                href="/dashboard"
-                className="w-full sm:w-auto px-6 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded-xl text-xs font-bold transition-all text-center shadow-md"
-              >
-                Dashboard
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {/* Executive Summary */}
-        <section className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Sparkles size={16} className="text-purple-400" />
-            <h3>Executive Summary</h3>
-          </div>
-          <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{feedback.summary}</p>
-        </section>
-
-        {/* Strengths & Areas for Improvement (2 Columns) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Strengths */}
-          <section className="bg-zinc-900/50 border border-emerald-900/30 rounded-2xl p-6 space-y-4 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
-              <CheckCircle2 size={18} />
-              <h3>Demonstrated Strengths</h3>
-            </div>
-            {feedback.strengths.length > 0 ? (
-              <ul className="space-y-2.5">
-                {feedback.strengths.map((str, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-xs text-zinc-300 leading-relaxed">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                    <span>{str}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-zinc-500 italic">No specific strengths recorded.</p>
-            )}
-          </section>
-
-          {/* Areas for Improvement */}
-          <section className="bg-zinc-900/50 border border-amber-900/30 rounded-2xl p-6 space-y-4 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-bold text-amber-400">
-              <TrendingUp size={18} />
-              <h3>Areas for Growth & Gaps</h3>
-            </div>
-            {feedback.areasForImprovement.length > 0 ? (
-              <ul className="space-y-2.5">
-                {feedback.areasForImprovement.map((gap, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-xs text-zinc-300 leading-relaxed">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-                    <span>{gap}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-zinc-500 italic">No major gaps identified.</p>
-            )}
-          </section>
-        </div>
-
-        {/* Skill Assessments Breakdown */}
-        {feedback.skillAssessments && feedback.skillAssessments.length > 0 && (
-          <section className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-white">
-              <Award size={18} className="text-purple-400" />
-              <h3>Topic & Skill Proficiency Breakdown</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {feedback.skillAssessments.map((skill, i) => (
-                <div key={i} className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-200">{skill.skill}</span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${skill.confidence === "high"
-                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                          : skill.confidence === "medium"
-                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                            : "bg-zinc-800 text-zinc-400 border-zinc-700"
-                        }`}
-                    >
-                      {skill.confidence} Conf.
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">{skill.notes}</p>
+            {/* Candidate Snapshot & Quick Actions */}
+            <div className="flex items-center gap-4 shrink-0">
+              <div className="flex flex-col items-center gap-1">
+                <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-[#e2e8f0] bg-slate-100 shadow-inner flex items-center justify-center">
+                  {candidateSnapshot ? (
+                    <Image
+                      src={candidateSnapshot}
+                      alt="Verified Candidate Snapshot"
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                  ) : (
+                    <User className="w-6 h-6 text-[#94a3b8]" />
+                  )}
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Question-by-Question Diagnostic */}
-        {feedback.questionFeedback && feedback.questionFeedback.length > 0 && (
-          <section className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-bold text-white">
-                <HelpCircle size={18} className="text-purple-400" />
-                <h3>Question-by-Question Evaluation ({feedback.questionFeedback.length} Questions)</h3>
-              </div>
-              <span className="text-[11px] text-zinc-500 font-mono">Grounded Per-Turn Analysis</span>
-            </div>
-
-            <div className="space-y-3">
-              {feedback.questionFeedback.map((q, idx) => {
-                const isExpanded = expandedQuestions[idx] ?? false;
-                const qualityColor =
-                  q.answerQuality === "excellent"
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                    : q.answerQuality === "good"
-                      ? "bg-green-500/20 text-green-300 border-green-500/30"
-                      : q.answerQuality === "fair"
-                        ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                        : "bg-rose-500/20 text-rose-300 border-rose-500/30";
-
-                return (
-                  <div key={idx} className="bg-zinc-950 border border-zinc-800/80 rounded-xl overflow-hidden transition-all">
-                    <button
-                      type="button"
-                      onClick={() => toggleQuestion(idx)}
-                      className="w-full text-left p-4 flex items-center justify-between gap-4 hover:bg-zinc-900/50 transition-colors"
-                    >
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-purple-400 font-semibold uppercase px-2 py-0.5 rounded bg-purple-950/40 border border-purple-800/40">
-                            {q.focusArea || `Topic ${idx + 1}`}
-                          </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${qualityColor}`}>
-                            {q.answerQuality.replace("_", " ")}
-                          </span>
-                        </div>
-                        <p className="text-xs font-medium text-zinc-200">{q.question}</p>
-                      </div>
-                      <div className="text-zinc-500">
-                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      <div className="p-4 pt-0 border-t border-zinc-800/60 space-y-3 bg-zinc-900/30">
-                        {q.strengths && q.strengths.length > 0 && (
-                          <div className="space-y-1">
-                            <span className="text-[11px] font-bold text-emerald-400">Strengths:</span>
-                            <ul className="space-y-1 pl-3">
-                              {q.strengths.map((st, si) => (
-                                <li key={si} className="text-[11px] text-zinc-300 list-disc">
-                                  {st}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {q.gaps && q.gaps.length > 0 && (
-                          <div className="space-y-1">
-                            <span className="text-[11px] font-bold text-amber-400">Gaps & Observations:</span>
-                            <ul className="space-y-1 pl-3">
-                              {q.gaps.map((gp, gi) => (
-                                <li key={gi} className="text-[11px] text-zinc-300 list-disc">
-                                  {gp}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {q.suggestedImprovement && (
-                          <div className="bg-purple-950/30 border border-purple-800/30 p-2.5 rounded-lg">
-                            <span className="text-[10px] font-bold text-purple-300 uppercase">Suggested Growth:</span>
-                            <p className="text-xs text-zinc-300 mt-0.5">{q.suggestedImprovement}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Integrity Signals Card */}
-        <section className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-bold text-white">
-              <ShieldCheck size={18} className="text-purple-400" />
-              <h3>Integrity & Proctoring Signals</h3>
-            </div>
-            <span className="text-[11px] text-zinc-500 font-mono">Advisory Context</span>
-          </div>
-
-          {feedback.integrityEvents && feedback.integrityEvents.length > 0 ? (
-            <div className="space-y-2">
-              <div className="bg-amber-950/20 border border-amber-800/40 p-3 rounded-xl flex items-center gap-2.5 text-xs text-amber-300">
-                <ShieldAlert size={16} className="text-amber-400 shrink-0" />
-                <span>
-                  {feedback.integrityEvents.length} advisory proctoring event(s) logged during this session for human reviewer reference.
+                <span className="text-[9px] font-mono text-[#94a3b8] flex items-center gap-1">
+                  <ShieldCheck className="w-2.5 h-2.5 text-[#4f46e5]" />
+                  Proctored
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {feedback.integrityEvents.map((ev, i) => (
-                  <div key={i} className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 text-[11px] flex justify-between items-center">
-                    <span className="font-semibold text-zinc-300 uppercase tracking-wide">{ev.type.replace("_", " ")}</span>
-                    <span className="text-zinc-500 font-mono">{new Date(ev.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                ))}
+
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleDownloadPdf}
+                  isLoading={isExportingPdf}
+                  className="font-semibold text-xs gap-1.5 h-8 px-3 bg-[#1e293b] hover:bg-[#0f172a] text-white"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Report</span>
+                </Button>
+                <Link href="/dashboard">
+                  <Button variant="secondary" size="sm" className="w-full text-xs font-semibold gap-1.5 h-8 px-3">
+                    <RotateCcw className="w-3.5 h-3.5 text-[#4f46e5]" />
+                    <span>Practice Again</span>
+                  </Button>
+                </Link>
               </div>
             </div>
-          ) : (
-            <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-800/30 flex items-center gap-2 text-xs text-emerald-400 font-medium">
-              <CheckCircle2 size={16} />
-              <span>Clean Session: No proctoring anomalies were recorded.</span>
-            </div>
-          )}
+          </div>
         </section>
 
-        {/* Bottom Navigation CTA */}
-        <div className="pt-4 pb-12 flex items-center justify-center gap-4">
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={isExportingPdf}
-            className="flex items-center gap-2 px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all text-sm cursor-pointer disabled:opacity-50"
-          >
-            <Download size={18} />
-            <span>{isExportingPdf ? "Generating PDF..." : "Download PDF Report"}</span>
-          </button>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 px-6 py-3.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl shadow-md border border-zinc-700 transition-all text-sm"
-          >
-            <LayoutDashboard size={18} />
-            <span>Back to Dashboard</span>
-          </Link>
+        {/* Scrollable Report Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
+          {/* Executive Synthesis */}
+          <Card glass className="p-4 space-y-2">
+            <CardHeader className="p-0 flex flex-row items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <CardTitle className="text-sm font-semibold text-white">Executive Synthesis</CardTitle>
+            </CardHeader>
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              {isEarlyConcluded
+                ? "This technical session concluded before comprehensive technical topics were completed. In upcoming sessions, engage with the AI's follow-up probes across algorithms and system design to unlock advanced rubric scoring."
+                : feedback.summary}
+            </p>
+          </Card>
+
+          {/* 4-Pillar Humanized Evaluation Matrix */}
+          <Card glass className="p-4 space-y-3">
+            <CardHeader className="p-0 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-purple-400" />
+                <CardTitle className="text-sm font-semibold text-white">
+                  Technical Competency Matrix
+                </CardTitle>
+              </div>
+              <span className="text-[10px] font-mono text-neutral-400">Core Engineering Pillars</span>
+            </CardHeader>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              {/* Pillar 1: Problem Solving */}
+              <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#0f172a]">
+                    <Target className="w-3.5 h-3.5 text-[#4f46e5]" />
+                    <span>Problem Solving</span>
+                  </div>
+                  <Badge variant={isEarlyConcluded ? "neutral" : "purple"} className="text-[9px] py-0 px-1.5">
+                    {isEarlyConcluded ? "Developing" : "Analyzed"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  {isEarlyConcluded
+                    ? "Clarify requirements, state assumptions upfront, and test boundary edge cases."
+                    : feedback.skillAssessments?.[0]?.notes || "Demonstrated structured analytical problem decomposition."}
+                </p>
+              </div>
+
+              {/* Pillar 2: System Design */}
+              <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#0f172a]">
+                    <Cpu className="w-3.5 h-3.5 text-[#0284c7]" />
+                    <span>System Design</span>
+                  </div>
+                  <Badge variant={isEarlyConcluded ? "neutral" : "cyan"} className="text-[9px] py-0 px-1.5">
+                    {isEarlyConcluded ? "Next Focus" : "Evaluated"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  {isEarlyConcluded
+                    ? "Focus on high-level architecture: caching, asynchronous message queues, and horizontal partitioning."
+                    : feedback.skillAssessments?.[1]?.notes || "Addressed distributed systems reliability and latency budgets."}
+                </p>
+              </div>
+
+              {/* Pillar 3: Technical Fundamentals */}
+              <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#0f172a]">
+                    <BookOpen className="w-3.5 h-3.5 text-[#16a34a]" />
+                    <span>Tech Breadth</span>
+                  </div>
+                  <Badge variant={isEarlyConcluded ? "neutral" : "success"} className="text-[9px] py-0 px-1.5">
+                    {isEarlyConcluded ? "Foundational" : "Demonstrated"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  {isEarlyConcluded
+                    ? "Deepen proficiency in your core stack (data structures, concurrency, API design)."
+                    : feedback.skillAssessments?.[2]?.notes || "Solid command of language idioms, schema design, and runtime patterns."}
+                </p>
+              </div>
+
+              {/* Pillar 4: Communication */}
+              <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#0f172a]">
+                    <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Articulation</span>
+                  </div>
+                  <Badge variant={isEarlyConcluded ? "neutral" : "warning"} className="text-[9px] py-0 px-1.5">
+                    {isEarlyConcluded ? "Active" : "Observed"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  {isEarlyConcluded
+                    ? "Vocalize technical tradeoffs out loud before choosing specific architectural directions."
+                    : "Clear communicative cadence with proactive clarification of design tradeoffs."}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* 2-Column: Demonstrated Strengths & Growth Areas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Strengths */}
+            <Card glass className="p-4 space-y-2 border-emerald-500/20">
+              <CardHeader className="p-0 flex flex-row items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CardTitle className="text-sm font-semibold text-emerald-400">
+                  Key Strengths
+                </CardTitle>
+              </CardHeader>
+              <ul className="space-y-1.5 text-xs text-neutral-300 leading-relaxed pt-1">
+                {feedback.strengths.length > 0 && !isEarlyConcluded ? (
+                  feedback.strengths.map((str, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                      <span>{str}</span>
+                    </li>
+                  ))
+                ) : (
+                  <>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                      <span>Initiated session setup with successful audio & video calibration</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                      <span>Engaged with the autonomous interview pipeline</span>
+                    </li>
+                  </>
+                )}
+              </ul>
+            </Card>
+
+            {/* Growth Areas */}
+            <Card glass className="p-4 space-y-2 border-amber-500/20">
+              <CardHeader className="p-0 flex flex-row items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-amber-400" />
+                <CardTitle className="text-sm font-semibold text-amber-400">
+                  Recommended Focus Areas
+                </CardTitle>
+              </CardHeader>
+              <ul className="space-y-1.5 text-xs text-neutral-300 leading-relaxed pt-1">
+                {feedback.areasForImprovement.length > 0 && !isEarlyConcluded ? (
+                  feedback.areasForImprovement.map((gap, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                      <span>{gap}</span>
+                    </li>
+                  ))
+                ) : (
+                  <>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                      <span>Practice answering 3–5 multi-turn follow-ups in technical rounds</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                      <span>Structure answers using the STAR method for architectural discussions</span>
+                    </li>
+                  </>
+                )}
+              </ul>
+            </Card>
+          </div>
+
+          {/* Diagnostic Question Accordion (if questions exist) */}
+          {feedback.questionFeedback && feedback.questionFeedback.length > 0 && (
+            <Card glass className="p-4 space-y-3">
+              <CardHeader className="p-0 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-purple-400" />
+                  <CardTitle className="text-sm font-semibold text-white">
+                    Question-by-Question Diagnostic ({feedback.questionFeedback.length} Questions)
+                  </CardTitle>
+                </div>
+                <span className="text-[10px] font-mono text-neutral-400">Grounded Probing Analysis</span>
+              </CardHeader>
+
+              <div className="space-y-2 pt-1">
+                {feedback.questionFeedback.map((q, idx) => {
+                  const isExpanded = expandedQuestions[idx] ?? false;
+
+                  const qualityVariant =
+                    q.answerQuality === "excellent"
+                      ? "success"
+                      : q.answerQuality === "good"
+                      ? "purple"
+                      : q.answerQuality === "fair"
+                      ? "warning"
+                      : "error";
+
+                  return (
+                    <div
+                      key={idx}
+                      className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] overflow-hidden transition-all shadow-xs"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleQuestion(idx)}
+                        className="w-full p-3 flex items-center justify-between text-left hover:bg-white/[0.02] transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5 pr-3">
+                          <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/5 border border-white/10 font-mono text-[10px] font-semibold text-neutral-400 shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <div className="text-xs font-semibold text-[#0f172a] leading-snug">
+                              {q.question}
+                            </div>
+                            <div className="text-[9px] text-neutral-400 font-mono mt-0.5">
+                              {q.focusArea}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant={qualityVariant} className="text-[9px] font-bold uppercase py-0 px-1.5">
+                            {q.answerQuality.replace("_", " ")}
+                          </Badge>
+                          {isExpanded ? (
+                            <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+                          )}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-[#e2e8f0] p-3 bg-white space-y-2 text-xs leading-relaxed animate-in fade-in duration-150">
+                          {q.strengths.length > 0 && (
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                                Strengths Observed:
+                              </span>
+                              <ul className="list-disc list-inside space-y-0.5 text-neutral-300 text-[11px]">
+                                {q.strengths.map((str, sIdx) => (
+                                  <li key={sIdx}>{str}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {q.gaps.length > 0 && (
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                                Key Gaps:
+                              </span>
+                              <ul className="list-disc list-inside space-y-0.5 text-neutral-300 text-[11px]">
+                                {q.gaps.map((gap, gIdx) => (
+                                  <li key={gIdx}>{gap}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {q.suggestedImprovement && (
+                            <div className="space-y-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 p-2.5">
+                              <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">
+                                Recommended Model Answer:
+                              </span>
+                              <p className="text-purple-200 text-xs mt-0.5">{q.suggestedImprovement}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
         </div>
       </main>
 
-      {/* Transcript Drawer Modal */}
+      {/* Transcript Drawer Overlay */}
       {showTranscriptDrawer && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-lg bg-zinc-900 border-l border-zinc-800 h-full flex flex-col p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <FileText size={18} className="text-purple-400" />
-                <h3 className="text-sm font-bold text-white">Full Interview Transcript</h3>
-              </div>
-              <button
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowTranscriptDrawer(false)}
+          />
+          <div className="relative z-50 w-full max-w-md bg-white border-l border-[#e2e8f0] p-5 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e2e8f0]">
+              <h3 className="text-sm font-bold text-[#0f172a]">Full Session Transcript</h3>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowTranscriptDrawer(false)}
-                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 text-xs font-semibold"
+                className="h-7 text-xs"
               >
-                ✕ Close
-              </button>
+                Close
+              </Button>
             </div>
-
-            <div className="flex-1 overflow-y-auto py-4 space-y-3">
-              {transcript.map((chunk, i) => (
-                <div
-                  key={chunk.id || i}
-                  className={`p-3 rounded-xl text-xs space-y-1 ${chunk.speaker === "ai"
-                      ? "bg-purple-950/40 border border-purple-800/40 text-purple-100 mr-8"
-                      : "bg-zinc-800/80 border border-zinc-700/60 text-zinc-100 ml-8"
+            <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
+              {transcript.map((chunk) => {
+                const isAi = chunk.speaker === "ai";
+                return (
+                  <div
+                    key={chunk.id}
+                    className={`p-2.5 rounded-xl text-xs space-y-1 ${
+                      isAi
+                        ? "bg-[#f1f5f9] border border-[#e2e8f0] text-[#0f172a]"
+                        : "bg-[#e0e7ff] border border-[#c7d2fe] text-[#3730a3]"
                     }`}
-                >
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
-                    {chunk.speaker === "ai" ? "AI Interviewer" : "Candidate"}
-                  </span>
-                  <p className="leading-relaxed">{chunk.content}</p>
-                </div>
-              ))}
+                  >
+                    <span className="font-bold text-[10px] text-neutral-400">
+                      {isAi ? "Interviewer" : "Candidate"}
+                    </span>
+                    <p className="whitespace-pre-wrap">{chunk.content}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
