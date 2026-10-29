@@ -250,7 +250,12 @@ export function useTurnOrchestrator({
         if (turnResp.isComplete) {
           await endSession("natural");
         } else {
-          await onAiSpeakRequested(turnResp.say);
+          setTurnState("ai_speaking");
+          try {
+            await onAiSpeakRequested(turnResp.say);
+          } finally {
+            setTurnState("user_turn");
+          }
         }
       } catch (error) {
         console.error("[TURN] Error:", error);
@@ -345,7 +350,12 @@ export function useTurnOrchestrator({
           const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today. Before we begin, is there anything you'd like to check on your end — audio, video, anything like that?`;
           if (!hasPlayedInitialGreetingRef.current) {
             hasPlayedInitialGreetingRef.current = true;
-            await onAiSpeakRequested(defaultGreeting);
+            setTurnState("ai_speaking");
+            try {
+              await onAiSpeakRequested(defaultGreeting);
+            } finally {
+              setTurnState("user_turn");
+            }
           } else {
             setTurnState("user_turn");
           }
@@ -357,7 +367,12 @@ export function useTurnOrchestrator({
           setTurnState("user_turn");
           if (entries.length === 1 && !hasPlayedInitialGreetingRef.current) {
             hasPlayedInitialGreetingRef.current = true;
-            await onAiSpeakRequested(lastEntry.text);
+            setTurnState("ai_speaking");
+            try {
+              await onAiSpeakRequested(lastEntry.text);
+            } finally {
+              setTurnState("user_turn");
+            }
           }
         } else {
           setTurnState("processing");

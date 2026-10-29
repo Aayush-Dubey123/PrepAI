@@ -104,15 +104,15 @@ export function SpeechCheck({ onSuccess, isPassed }: SpeechCheckProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-[#e2e8f0] bg-white p-4 space-y-3 shadow-xs">
+    <div className="rounded-2xl border border-[#e2e8f0] bg-white p-2.5 sm:p-3 space-y-2 shadow-xs">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#fffbeb] border border-[#fef3c7] flex items-center justify-center text-[#d97706]">
-            <MessageSquare className="w-4 h-4" />
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-[#fffbeb] border border-[#fef3c7] flex items-center justify-center text-[#d97706] shrink-0">
+            <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-[#0f172a]">3. Speech Recognition</h3>
-            <p className="text-xs text-[#64748b]">
+            <h3 className="text-xs sm:text-sm font-bold text-[#0f172a]">3. Speech Recognition</h3>
+            <p className="text-[11px] text-[#64748b]">
               Say <span className="text-[#b45309] font-medium">&quot;Ready for interview&quot;</span> or introduce yourself
             </p>
           </div>
@@ -121,7 +121,7 @@ export function SpeechCheck({ onSuccess, isPassed }: SpeechCheckProps) {
         <Badge variant={isPassed ? "success" : "neutral"}>
           {isPassed ? (
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
               Transcribed
             </span>
           ) : (
@@ -131,20 +131,20 @@ export function SpeechCheck({ onSuccess, isPassed }: SpeechCheckProps) {
       </div>
 
       {transcript && (
-        <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3.5 py-2 text-xs text-[#0f172a] font-mono">
+        <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-1.5 text-[11px] text-[#0f172a] font-mono">
           <span className="text-[#64748b] mr-2">Transcript:</span>
           &quot;{transcript}&quot;
         </div>
       )}
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-rose-500">{error}</p>}
 
-      <div className="flex items-center justify-between pt-1">
+      <div className="flex items-center justify-between pt-0.5">
         <Button
           variant={isListening ? "danger" : "outline"}
           size="sm"
           onClick={isListening ? stopTest : startTest}
-          className="text-xs gap-1.5"
+          className="text-xs gap-1.5 h-8"
         >
           {isListening ? (
             <>
@@ -153,7 +153,7 @@ export function SpeechCheck({ onSuccess, isPassed }: SpeechCheckProps) {
             </>
           ) : (
             <>
-              <Mic className="w-3.5 h-3.5 text-amber-400" />
+              <Mic className="w-3.5 h-3.5 text-[#d97706]" />
               <span>{isPassed ? "Test Again" : "Start Voice Test"}</span>
             </>
           )}
@@ -164,7 +164,7 @@ export function SpeechCheck({ onSuccess, isPassed }: SpeechCheckProps) {
             variant="ghost"
             size="sm"
             onClick={startTest}
-            className="text-xs text-neutral-400 hover:text-white gap-1"
+            className="text-xs text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] gap-1 h-8"
           >
             <RefreshCw className="w-3 h-3" />
             <span>Retest</span>

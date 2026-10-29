@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -25,7 +25,11 @@ import {
   Target,
   MessageSquare,
   BookOpen,
+  Trash2,
+  Share2,
+  Check,
 } from "lucide-react";
+import { useToast } from "@/src/components/ui/ToastProvider";
 import { generateFeedbackPdf } from "@/src/lib/pdf-export";
 import { Button } from "@/src/components/ui/Button";
 import { Badge } from "@/src/components/ui/Badge";
@@ -80,7 +84,41 @@ export default function InterviewFeedbackPage() {
   const [showTranscriptDrawer, setShowTranscriptDrawer] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Record<number, boolean>>({});
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
+  const handleCopyLink = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      toast("Report link copied to clipboard", { type: "info" });
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!interviewId) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/interviews/${interviewId}`, { method: "DELETE" });
+      if (res.ok) {
+        toast("Interview record deleted", { type: "info" });
+        router.push("/dashboard");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast(err.error || "Could not delete record", { type: "error" });
+        setIsDeleting(false);
+        setShowDeleteModal(false);
+      }
+    } catch {
+      toast("Delete request failed", { type: "error" });
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
   const handleDownloadPdf = () => {
     if (!feedback) return;
     setIsExportingPdf(true);
@@ -213,22 +251,22 @@ export default function InterviewFeedbackPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col items-center justify-center p-6 select-none">
-        <div className="max-w-md w-full rounded-2xl border border-white/10 bg-[#141417]/80 p-8 text-center space-y-6 shadow-2xl backdrop-blur-xl">
+      <div className="min-h-screen bg-[#f4f6fa] text-[#0f172a] flex flex-col items-center justify-center p-6 select-none">
+        <div className="max-w-md w-full rounded-2xl border border-[#e2e8f0] bg-white p-8 text-center space-y-6 shadow-xl">
           <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
-            <Sparkles className="w-7 h-7 text-purple-400 animate-pulse" />
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-100 border-t-[#4f46e5] animate-spin" />
+            <Sparkles className="w-7 h-7 text-[#4f46e5] animate-pulse" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white tracking-tight">Generating Technical Evaluation...</h2>
-            <p className="text-xs text-neutral-400 leading-relaxed">
+            <h2 className="text-xl font-bold text-[#0f172a] tracking-tight">Generating Technical Evaluation...</h2>
+            <p className="text-xs text-[#64748b] leading-relaxed">
               Synthesizing adaptive turn progression, multi-turn citations, and rubric scores across all covered topics.
             </p>
           </div>
-          <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
-            <div className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full w-2/3 animate-pulse" />
+          <div className="w-full bg-[#f1f5f9] rounded-full h-1.5 overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-500 to-[#4338ca] h-full w-2/3 animate-pulse" />
           </div>
-          <p className="text-[11px] text-neutral-500 font-mono">Session ID: {interviewId?.slice(0, 8)}…</p>
+          <p className="text-[11px] text-[#94a3b8] font-mono">Session ID: {interviewId?.slice(0, 8)}…</p>
         </div>
       </div>
     );
@@ -236,16 +274,16 @@ export default function InterviewFeedbackPage() {
 
   if (error || !feedback) {
     return (
-      <div className="min-h-screen bg-[#09090b] text-neutral-100 flex flex-col items-center justify-center p-6 select-none">
-        <div className="max-w-md w-full rounded-2xl border border-rose-500/30 bg-[#141417] p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-400">
+      <div className="min-h-screen bg-[#f4f6fa] text-[#0f172a] flex flex-col items-center justify-center p-6 select-none">
+        <div className="max-w-md w-full rounded-2xl border border-rose-200 bg-white p-8 text-center space-y-6 shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto text-rose-600">
             <AlertCircle size={28} />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white">Evaluation Notice</h2>
-            <p className="text-xs text-neutral-400">{error || "Could not retrieve feedback report."}</p>
+            <h2 className="text-xl font-bold text-[#0f172a]">Evaluation Notice</h2>
+            <p className="text-xs text-[#64748b]">{error || "Could not retrieve feedback report."}</p>
           </div>
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-wrap gap-2.5 justify-center">
             <Button variant="primary" size="sm" onClick={() => window.location.reload()}>
               Retry
             </Button>
@@ -255,6 +293,16 @@ export default function InterviewFeedbackPage() {
                 <span>Return to Cockpit</span>
               </Button>
             </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDeleteRecord}
+              isLoading={isDeleting}
+              className="gap-1.5 text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 cursor-pointer"
+            >
+              <Trash2 size={14} />
+              <span>Delete Record</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -285,9 +333,20 @@ export default function InterviewFeedbackPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleCopyLink}
+            className="text-xs h-7 gap-1 text-[#475569] hover:text-[#0f172a]"
+            title="Copy report link"
+          >
+            {copiedLink ? <Check className="w-3 h-3 text-emerald-600" /> : <Share2 className="w-3 h-3 text-[#4f46e5]" />}
+            <span className="hidden md:inline">{copiedLink ? "Copied" : "Share"}</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleDownloadPdf}
             isLoading={isExportingPdf}
-            className="text-xs h-7 gap-1 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+            className="text-xs h-7 gap-1 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
           >
             <Download className="w-3 h-3" />
             <span className="hidden sm:inline">Export PDF</span>
@@ -299,8 +358,19 @@ export default function InterviewFeedbackPage() {
             onClick={() => setShowTranscriptDrawer(true)}
             className="text-xs h-7 gap-1"
           >
-            <FileText className="w-3 h-3 text-purple-400" />
+            <FileText className="w-3 h-3 text-[#4f46e5]" />
             <span>Transcript ({transcript.length})</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDeleteModal(true)}
+            className="text-xs h-7 gap-1 border-rose-200 text-rose-600 bg-rose-50/50 hover:bg-rose-100/70 cursor-pointer"
+            title="Delete this interview report"
+          >
+            <Trash2 className="w-3 h-3 text-rose-600" />
+            <span className="hidden md:inline">Delete</span>
           </Button>
         </div>
       </header>
@@ -417,10 +487,10 @@ export default function InterviewFeedbackPage() {
           {/* Executive Synthesis */}
           <Card glass className="p-4 space-y-2">
             <CardHeader className="p-0 flex flex-row items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <CardTitle className="text-sm font-semibold text-white">Executive Synthesis</CardTitle>
+              <Sparkles className="w-4 h-4 text-[#4f46e5]" />
+              <CardTitle className="text-sm font-semibold text-[#0f172a]">Executive Synthesis</CardTitle>
             </CardHeader>
-            <p className="text-xs text-neutral-300 leading-relaxed">
+            <p className="text-xs text-[#475569] leading-relaxed">
               {isEarlyConcluded
                 ? "This technical session concluded before comprehensive technical topics were completed. In upcoming sessions, engage with the AI's follow-up probes across algorithms and system design to unlock advanced rubric scoring."
                 : feedback.summary}
@@ -431,12 +501,12 @@ export default function InterviewFeedbackPage() {
           <Card glass className="p-4 space-y-3">
             <CardHeader className="p-0 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
-                <Award className="w-4 h-4 text-purple-400" />
-                <CardTitle className="text-sm font-semibold text-white">
+                <Award className="w-4 h-4 text-[#4f46e5]" />
+                <CardTitle className="text-sm font-semibold text-[#0f172a]">
                   Technical Competency Matrix
                 </CardTitle>
               </div>
-              <span className="text-[10px] font-mono text-neutral-400">Core Engineering Pillars</span>
+              <span className="text-[10px] font-mono text-[#64748b]">Core Engineering Pillars</span>
             </CardHeader>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
@@ -451,7 +521,7 @@ export default function InterviewFeedbackPage() {
                     {isEarlyConcluded ? "Developing" : "Analyzed"}
                   </Badge>
                 </div>
-                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                <p className="text-[11px] text-[#475569] leading-relaxed">
                   {isEarlyConcluded
                     ? "Clarify requirements, state assumptions upfront, and test boundary edge cases."
                     : feedback.skillAssessments?.[0]?.notes || "Demonstrated structured analytical problem decomposition."}
@@ -469,7 +539,7 @@ export default function InterviewFeedbackPage() {
                     {isEarlyConcluded ? "Next Focus" : "Evaluated"}
                   </Badge>
                 </div>
-                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                <p className="text-[11px] text-[#475569] leading-relaxed">
                   {isEarlyConcluded
                     ? "Focus on high-level architecture: caching, asynchronous message queues, and horizontal partitioning."
                     : feedback.skillAssessments?.[1]?.notes || "Addressed distributed systems reliability and latency budgets."}
@@ -487,7 +557,7 @@ export default function InterviewFeedbackPage() {
                     {isEarlyConcluded ? "Foundational" : "Demonstrated"}
                   </Badge>
                 </div>
-                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                <p className="text-[11px] text-[#475569] leading-relaxed">
                   {isEarlyConcluded
                     ? "Deepen proficiency in your core stack (data structures, concurrency, API design)."
                     : feedback.skillAssessments?.[2]?.notes || "Solid command of language idioms, schema design, and runtime patterns."}
@@ -505,7 +575,7 @@ export default function InterviewFeedbackPage() {
                     {isEarlyConcluded ? "Active" : "Observed"}
                   </Badge>
                 </div>
-                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                <p className="text-[11px] text-[#475569] leading-relaxed">
                   {isEarlyConcluded
                     ? "Vocalize technical tradeoffs out loud before choosing specific architectural directions."
                     : "Clear communicative cadence with proactive clarification of design tradeoffs."}
@@ -517,29 +587,29 @@ export default function InterviewFeedbackPage() {
           {/* 2-Column: Demonstrated Strengths & Growth Areas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Strengths */}
-            <Card glass className="p-4 space-y-2 border-emerald-500/20">
+            <Card glass className="p-4 space-y-2 border-emerald-200/80 bg-white">
               <CardHeader className="p-0 flex flex-row items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <CardTitle className="text-sm font-semibold text-emerald-400">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <CardTitle className="text-sm font-semibold text-emerald-700">
                   Key Strengths
                 </CardTitle>
               </CardHeader>
-              <ul className="space-y-1.5 text-xs text-neutral-300 leading-relaxed pt-1">
+              <ul className="space-y-1.5 text-xs text-[#334155] leading-relaxed pt-1">
                 {feedback.strengths.length > 0 && !isEarlyConcluded ? (
                   feedback.strengths.map((str, i) => (
                     <li key={i} className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
                       <span>{str}</span>
                     </li>
                   ))
                 ) : (
                   <>
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
                       <span>Initiated session setup with successful audio & video calibration</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-1.5 shrink-0" />
                       <span>Engaged with the autonomous interview pipeline</span>
                     </li>
                   </>
@@ -548,29 +618,29 @@ export default function InterviewFeedbackPage() {
             </Card>
 
             {/* Growth Areas */}
-            <Card glass className="p-4 space-y-2 border-amber-500/20">
+            <Card glass className="p-4 space-y-2 border-amber-200/80 bg-white">
               <CardHeader className="p-0 flex flex-row items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-amber-400" />
-                <CardTitle className="text-sm font-semibold text-amber-400">
+                <TrendingUp className="w-4 h-4 text-amber-600" />
+                <CardTitle className="text-sm font-semibold text-amber-700">
                   Recommended Focus Areas
                 </CardTitle>
               </CardHeader>
-              <ul className="space-y-1.5 text-xs text-neutral-300 leading-relaxed pt-1">
+              <ul className="space-y-1.5 text-xs text-[#334155] leading-relaxed pt-1">
                 {feedback.areasForImprovement.length > 0 && !isEarlyConcluded ? (
                   feedback.areasForImprovement.map((gap, i) => (
                     <li key={i} className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0" />
                       <span>{gap}</span>
                     </li>
                   ))
                 ) : (
                   <>
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0" />
                       <span>Practice answering 3–5 multi-turn follow-ups in technical rounds</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-1.5 shrink-0" />
                       <span>Structure answers using the STAR method for architectural discussions</span>
                     </li>
                   </>
@@ -584,12 +654,12 @@ export default function InterviewFeedbackPage() {
             <Card glass className="p-4 space-y-3">
               <CardHeader className="p-0 flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-purple-400" />
-                  <CardTitle className="text-sm font-semibold text-white">
+                  <HelpCircle className="w-4 h-4 text-[#4f46e5]" />
+                  <CardTitle className="text-sm font-semibold text-[#0f172a]">
                     Question-by-Question Diagnostic ({feedback.questionFeedback.length} Questions)
                   </CardTitle>
                 </div>
-                <span className="text-[10px] font-mono text-neutral-400">Grounded Probing Analysis</span>
+                <span className="text-[10px] font-mono text-[#64748b]">Grounded Probing Analysis</span>
               </CardHeader>
 
               <div className="space-y-2 pt-1">
@@ -613,17 +683,17 @@ export default function InterviewFeedbackPage() {
                       <button
                         type="button"
                         onClick={() => toggleQuestion(idx)}
-                        className="w-full p-3 flex items-center justify-between text-left hover:bg-white/[0.02] transition-colors cursor-pointer"
+                        className="w-full p-3 flex items-center justify-between text-left hover:bg-slate-200/40 transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 pr-3">
-                          <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white/5 border border-white/10 font-mono text-[10px] font-semibold text-neutral-400 shrink-0">
+                          <span className="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-[#e2e8f0] font-mono text-[10px] font-semibold text-[#64748b] shrink-0">
                             {idx + 1}
                           </span>
                           <div>
                             <div className="text-xs font-semibold text-[#0f172a] leading-snug">
                               {q.question}
                             </div>
-                            <div className="text-[9px] text-neutral-400 font-mono mt-0.5">
+                            <div className="text-[9px] text-[#64748b] font-mono mt-0.5">
                               {q.focusArea}
                             </div>
                           </div>
@@ -634,9 +704,9 @@ export default function InterviewFeedbackPage() {
                             {q.answerQuality.replace("_", " ")}
                           </Badge>
                           {isExpanded ? (
-                            <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
+                            <ChevronUp className="w-3.5 h-3.5 text-[#64748b]" />
                           ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+                            <ChevronDown className="w-3.5 h-3.5 text-[#64748b]" />
                           )}
                         </div>
                       </button>
@@ -645,10 +715,10 @@ export default function InterviewFeedbackPage() {
                         <div className="border-t border-[#e2e8f0] p-3 bg-white space-y-2 text-xs leading-relaxed animate-in fade-in duration-150">
                           {q.strengths.length > 0 && (
                             <div className="space-y-0.5">
-                              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
                                 Strengths Observed:
                               </span>
-                              <ul className="list-disc list-inside space-y-0.5 text-neutral-300 text-[11px]">
+                              <ul className="list-disc list-inside space-y-0.5 text-[#334155] text-[11px]">
                                 {q.strengths.map((str, sIdx) => (
                                   <li key={sIdx}>{str}</li>
                                 ))}
@@ -658,10 +728,10 @@ export default function InterviewFeedbackPage() {
 
                           {q.gaps.length > 0 && (
                             <div className="space-y-0.5">
-                              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                              <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">
                                 Key Gaps:
                               </span>
-                              <ul className="list-disc list-inside space-y-0.5 text-neutral-300 text-[11px]">
+                              <ul className="list-disc list-inside space-y-0.5 text-[#334155] text-[11px]">
                                 {q.gaps.map((gap, gIdx) => (
                                   <li key={gIdx}>{gap}</li>
                                 ))}
@@ -670,11 +740,11 @@ export default function InterviewFeedbackPage() {
                           )}
 
                           {q.suggestedImprovement && (
-                            <div className="space-y-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 p-2.5">
-                              <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">
+                            <div className="space-y-0.5 rounded-lg bg-indigo-50 border border-indigo-200 p-2.5">
+                              <span className="text-[10px] font-bold text-[#4338ca] uppercase tracking-wider">
                                 Recommended Model Answer:
                               </span>
-                              <p className="text-purple-200 text-xs mt-0.5">{q.suggestedImprovement}</p>
+                              <p className="text-[#3730a3] text-xs mt-0.5">{q.suggestedImprovement}</p>
                             </div>
                           )}
                         </div>
@@ -692,10 +762,10 @@ export default function InterviewFeedbackPage() {
       {showTranscriptDrawer && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowTranscriptDrawer(false)}
           />
-          <div className="relative z-50 w-full max-w-md bg-white border-l border-[#e2e8f0] p-5 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-200">
+          <div className="relative z-50 w-full max-w-md bg-white border-l border-[#e2e8f0] p-5 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-200 text-[#0f172a]">
             <div className="flex items-center justify-between pb-3 border-b border-[#e2e8f0]">
               <h3 className="text-sm font-bold text-[#0f172a]">Full Session Transcript</h3>
               <Button
@@ -719,13 +789,57 @@ export default function InterviewFeedbackPage() {
                         : "bg-[#e0e7ff] border border-[#c7d2fe] text-[#3730a3]"
                     }`}
                   >
-                    <span className="font-bold text-[10px] text-neutral-400">
+                    <span className="font-bold text-[10px] text-[#64748b]">
                       {isAi ? "Interviewer" : "Candidate"}
                     </span>
                     <p className="whitespace-pre-wrap">{chunk.content}</p>
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => !isDeleting && setShowDeleteModal(false)}
+          />
+          <div className="relative z-50 w-full max-w-sm bg-white rounded-2xl border border-rose-200 p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#0f172a]">Delete Interview Record?</h3>
+                <p className="text-[11px] text-[#64748b]">This action is permanent and cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-xs text-[#334155] leading-relaxed">
+              All transcript turns, scores, AI feedback, and records for this session will be permanently deleted from your account.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteModal(false)}
+                className="text-xs h-8"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                isLoading={isDeleting}
+                onClick={handleDeleteRecord}
+                className="text-xs h-8 bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                Delete Record
+              </Button>
             </div>
           </div>
         </div>

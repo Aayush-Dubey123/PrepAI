@@ -5,6 +5,18 @@ import { IntegrityDetector } from "@/src/lib/integrity/detector";
 import { INTEGRITY_CONFIG } from "@/src/lib/integrity/config";
 import type { IntegrityEvent } from "@/src/schemas/integrity";
 
+export interface GuidanceNotice {
+  type:
+    | "no_face"
+    | "multiple_faces"
+    | "gaze_away"
+    | "tab_switch"
+    | "fullscreen_exit"
+    | "face_restored"
+    | string;
+  message: string;
+}
+
 export interface UseIntegrityMonitorOptions {
   interviewId?: string;
   mediaStream: MediaStream | null;
@@ -22,11 +34,15 @@ export function useIntegrityMonitor({
 }: UseIntegrityMonitorOptions) {
   const [strikes, setStrikes] = useState(0);
   const [warning, setWarning] = useState<string | null>(null);
+  const [guidance, setGuidance] = useState<GuidanceNotice | null>(null);
   const [isTerminated, setIsTerminated] = useState(false);
   const [integrityDebug, setIntegrityDebug] = useState<Record<string, unknown> | null>(null);
 
   const detectorRef = useRef<IntegrityDetector | null>(null);
   const onTerminateRef = useRef(onTerminate);
+  const lastGuidanceTimes = useRef<Map<string, number>>(new Map());
+  const guidanceTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const hadFaceAbsence = useRef<boolean>(false);
 
   useEffect(() => {
     onTerminateRef.current = onTerminate;
@@ -36,6 +52,45 @@ export function useIntegrityMonitor({
     const videoElement = videoRef.current;
     if (!videoElement || !mediaStream || !interviewId) return;
     let detector: IntegrityDetector | null = null;
+
+    const triggerGuidance = (notice: GuidanceNotice) => {
+      const now = Date.now();
+      if (notice.type === "no_face") {
+        hadFaceAbsence.current = true;
+        const lastTime = lastGuidanceTimes.current.get(notice.type) || 0;
+        if (now - lastTime >= 4000) {
+          lastGuidanceTimes.current.set(notice.type, now);
+          clearTimeout(guidanceTimerRef.current);
+          setGuidance(notice);
+        }
+        return;
+      }
+
+      if (notice.type === "face_restored") {
+        if (hadFaceAbsence.current) {
+          hadFaceAbsence.current = false;
+          clearTimeout(guidanceTimerRef.current);
+          setGuidance(notice);
+          guidanceTimerRef.current = setTimeout(() => {
+            setGuidance(null);
+          }, 2000);
+        }
+        return;
+      }
+
+      // Transient guidance (tab_switch, fullscreen_exit, gaze_away, multiple_faces): 4s minimum anti-spam
+      const lastTime = lastGuidanceTimes.current.get(notice.type) || 0;
+      if (now - lastTime < 4000) {
+        return;
+      }
+      lastGuidanceTimes.current.set(notice.type, now);
+
+      clearTimeout(guidanceTimerRef.current);
+      setGuidance(notice);
+      guidanceTimerRef.current = setTimeout(() => {
+        setGuidance(null);
+      }, 8000);
+    };
 
     const startDetector = async () => {
       detector = new IntegrityDetector({
@@ -100,26 +155,14 @@ export function useIntegrityMonitor({
               if (data.success && !data.deduplicated) {
                 setStrikes(data.strikeNumber);
                 setWarning(
-                  `⚠️ Integrity Warning: Sustained ${event.type
-                    .replace("_", " ")
-                    .toUpperCase()} detected (${data.strikeNumber}/${
+                  `⚠️ Integrity Strike (${data.strikeNumber}/${
                     INTEGRITY_CONFIG.maxStrikes
-                  } strikes)`
+                  }): Sustained ${event.type
+                    .replace("_", " ")
+                    .toUpperCase()} detected`
                 );
 
-                // Only speak if session is actively ongoing and not closing/terminated
-                if (
-                  turnState !== "closed" &&
-                  !data.isTerminated &&
-                  typeof window !== "undefined" &&
-                  "speechSynthesis" in window
-                ) {
-                  const warnAudio = new SpeechSynthesisUtterance(
-                    "Notice: Please keep your eyes on the screen during the interview."
-                  );
-                  window.speechSynthesis.speak(warnAudio);
-                }
-
+                // Strictly visual notifications to prevent voice collisions and false barge-in
                 if (data.isTerminated) {
                   setIsTerminated(true);
                   setTimeout(() => {
@@ -128,7 +171,7 @@ export function useIntegrityMonitor({
                 } else {
                   setTimeout(() => {
                     setWarning(null);
-                  }, 6000);
+                  }, 8000);
                 }
               }
             } else {
@@ -140,6 +183,17 @@ export function useIntegrityMonitor({
           } catch (err) {
             console.error("[INTEGRITY_API_ERROR]", err);
           }
+        },
+        onFaceDetected: (detected: boolean) => {
+          if (detected && hadFaceAbsence.current) {
+            triggerGuidance({
+              type: "face_restored",
+              message: "Face detected • Resumed",
+            });
+          }
+        },
+        onGuidanceNudge: (nudge) => {
+          triggerGuidance(nudge);
         },
         onDebugFrame: (data) => {
           setIntegrityDebug(data);
@@ -165,13 +219,10 @@ export function useIntegrityMonitor({
       detector?.stop();
       detector?.close();
       detectorRef.current = null;
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        try {
-          window.speechSynthesis.cancel();
-        } catch {}
-      }
+      clearTimeout(guidanceTimerRef.current);
     };
-  }, [interviewId, mediaStream, videoRef, turnState]);
+  }, [interviewId, mediaStream, videoRef]);
+
   useEffect(() => {
     detectorRef.current?.setAiSpeaking(turnState === "ai_speaking");
   }, [turnState]);
@@ -179,8 +230,10 @@ export function useIntegrityMonitor({
   return {
     strikes,
     warning,
+    guidance,
     isTerminated,
     detectorRef,
     integrityDebug,
+    clearGuidance: () => setGuidance(null),
   };
 }

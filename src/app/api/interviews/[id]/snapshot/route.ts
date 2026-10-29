@@ -13,7 +13,11 @@ import { logEvent } from "@/src/lib/audit";
 import { z } from "zod";
 
 const SnapshotRequestSchema = z.object({
-  snapshot: z.string().min(10, "Invalid snapshot data"),
+  snapshot: z
+    .string()
+    .min(10, "Invalid snapshot data")
+    .max(500_000, "Snapshot data exceeds 500KB limit")
+    .regex(/^data:image\/(jpeg|png|webp);base64,/, "Snapshot must be a valid base64 image data URI"),
 });
 
 export async function POST(

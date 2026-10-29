@@ -10,68 +10,34 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks, auditEvents } from "@/src/db/schema";
 import { eq, count, avg, desc } from "drizzle-orm";
-// ── Admin Guard ──────────────────────────────────────────────────────────────
+import {
+  checkIsAdmin,
+  getClientIP,
+  getAllowedIPs,
+  getAdminUserIds,
+  isLocalhostIP,
+} from "@/src/lib/auth/admin";
 
-function getAdminUserIds(): string[] {
-  return (process.env.ADMIN_USER_IDS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function getAllowedIPs(): string[] {
-  return (process.env.ADMIN_ALLOWED_IPS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function getClientIP(req: NextRequest): string {
-  const cfIp = req.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
-  return "127.0.0.1";
-}
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. Auth check
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 1. Authorize Admin Access
+    const authResult = await checkIsAdmin(req);
+    if (!authResult.isAdmin) {
+      return NextResponse.json(
+        { error: authResult.error || "Forbidden: Admin privileges required" },
+        { status: authResult.status || 403 }
+      );
     }
 
-    // 2. Admin user ID check
     const adminIds = getAdminUserIds();
-    if (adminIds.length === 0) {
-      if (process.env.NODE_ENV === "production") {
-        return NextResponse.json({ error: "Forbidden: ADMIN_USER_IDS not configured" }, { status: 403 });
-      }
-    } else if (!adminIds.includes(userId)) {
-      return NextResponse.json({ error: "Forbidden: not an admin" }, { status: 403 });
-    }
-    // 3. IP allowlist check
     const allowedIPs = getAllowedIPs();
-    if (allowedIPs.length > 0) {
-      const clientIP = getClientIP(req);
-      // Allow localhost variants always
-      const localhostAliases = ["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"];
-      const isLocalhost = localhostAliases.includes(clientIP);
-      if (!isLocalhost && !allowedIPs.includes(clientIP)) {
-        return NextResponse.json(
-          { error: `Forbidden: IP ${clientIP} not in allowlist` },
-          { status: 403 },
-        );
-      }
-    }
-
+    const clientIP = getClientIP(req);
+    const isLocalhost = isLocalhostIP(clientIP);
     // ── Fetch Platform Stats ──────────────────────────────────────────────
 
     // Total interviews by status
@@ -292,10 +258,10 @@ export async function GET(req: NextRequest) {
       sessionsPerDay,
       candidateSnapshots,
       clientNetwork: {
-        clientIp: getClientIP(req),
+        clientIp: clientIP,
         allowedIpsConfigured: allowedIPs.length > 0,
         adminUserIdsConfigured: adminIds.length > 0,
-        isLocalhost: ["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"].includes(getClientIP(req)),
+        isLocalhost,
       },
       researchMetricsNote:
         "Research-grade metrics (WER, Precision/Recall/F1, MAE, Pearson/Spearman Correlation, QWK, Cohen's Kappa) require human-annotated evaluation data. Run `npm run eval:report` with populated eval-data/ CSVs to compute these. The metrics shown here are derived from " +

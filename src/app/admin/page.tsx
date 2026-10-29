@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BarChart3,
   Shield,
@@ -89,6 +90,7 @@ interface AnalyticsData {
 type TabType = "overview" | "scoring" | "research" | "network" | "snapshots";
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,9 +107,7 @@ export default function AdminDashboardPage() {
       if (isManual) setRefreshing(true);
       const res = await fetch("/api/admin/analytics");
       if (res.status === 401) {
-        setError("Unauthorized — Please sign in to access admin telemetry.");
-        setLoading(false);
-        setRefreshing(false);
+        router.replace("/admin/login");
         return;
       }
       if (res.status === 403) {
@@ -155,10 +155,9 @@ export default function AdminDashboardPage() {
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: "#09090b",
+        backgroundColor: "#f4f6fa",
         logging: false,
       });
-
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -194,10 +193,10 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090b] text-[#fafafa] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f4f6fa] text-[#0f172a] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-violet-500/20 border-t-violet-500 animate-spin" />
-          <p className="text-xs text-zinc-400 font-mono tracking-widest uppercase">Initializing Telemetry Engine...</p>
+          <div className="w-12 h-12 rounded-full border-4 border-indigo-100 border-t-[#4f46e5] animate-spin" />
+          <p className="text-xs text-[#64748b] font-mono tracking-widest uppercase font-semibold">Initializing Telemetry Engine...</p>
         </div>
       </div>
     );
@@ -205,21 +204,27 @@ export default function AdminDashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#09090b] text-[#fafafa] flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-[#141417] border border-rose-500/30 rounded-2xl p-8 text-center space-y-5 shadow-2xl backdrop-blur-xl">
-          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-400">
+      <div className="min-h-screen bg-[#f4f6fa] text-[#0f172a] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-rose-200 rounded-2xl p-8 text-center space-y-5 shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto text-rose-600">
             <Lock size={24} />
           </div>
           <div className="space-y-1">
-            <h2 className="text-lg font-bold text-white tracking-tight">Access Restricted</h2>
-            <p className="text-xs text-zinc-400 leading-relaxed">{error}</p>
+            <h2 className="text-lg font-bold text-[#0f172a] tracking-tight">Access Restricted</h2>
+            <p className="text-xs text-[#64748b] leading-relaxed">{error}</p>
           </div>
-          <div className="pt-2 flex gap-3 justify-center">
+          <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/dashboard"
-              className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-all border border-white/10"
+              className="px-4 py-2.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-xl text-xs font-semibold transition-all shadow-xs"
             >
-              Return to Dashboard
+              Return to Candidate Dashboard
+            </Link>
+            <Link
+              href="/admin/login"
+              className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-[#e2e8f0] text-[#0f172a] rounded-xl text-xs font-semibold transition-all shadow-xs"
+            >
+              Sign in with Admin Credentials
             </Link>
           </div>
         </div>
@@ -293,26 +298,26 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Analytics & Telemetry Console</h1>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[9px] font-mono text-emerald-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  RESTRICTED
+                <h1 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Platform Operations & Admin Console</h1>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-[9px] font-mono font-semibold text-indigo-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                  RESTRICTED STAFF
                 </span>
               </div>
-              <p className="text-[10px] text-[#94a3b8] font-mono">PrepAI System Telemetry</p>
+              <p className="text-[10px] text-[#94a3b8] font-mono">PrepAI Platform Operations Telemetry</p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <span className="text-[10px] text-zinc-400 font-mono hidden md:block">
+          <span className="text-[10px] text-[#94a3b8] font-mono hidden md:block">
             Updated {new Date(data.generatedAt).toLocaleTimeString()}
           </span>
 
           <button
             onClick={() => { void fetchData(true); }}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-medium text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-[#e2e8f0] text-xs font-medium text-[#334155] hover:text-[#0f172a] transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
           >
             <RefreshCcw size={13} className={refreshing ? "animate-spin" : ""} />
             <span className="hidden sm:inline">Refresh</span>
@@ -321,7 +326,7 @@ export default function AdminDashboardPage() {
           <button
             onClick={handleDownloadPdf}
             disabled={downloadingPdf}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-xs font-semibold text-white shadow-lg shadow-violet-500/20 transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#1e293b] hover:bg-[#0f172a] text-xs font-semibold text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
           >
             {downloadingPdf ? (
               <RefreshCcw size={13} className="animate-spin" />
@@ -361,11 +366,11 @@ export default function AdminDashboardPage() {
           </div>
 
           {clientNetwork && (
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#141417] border border-white/10 text-[11px] font-mono text-zinc-400">
-              <Wifi size={13} className="text-emerald-400" />
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-[#e2e8f0] text-[11px] font-mono text-[#64748b] shadow-2xs">
+              <Wifi size={13} className="text-[#15803d]" />
               <span>IP: {clientNetwork.clientIp}</span>
-              <span className="text-zinc-600">•</span>
-              <span className="text-violet-400">LAN Host Active</span>
+              <span className="text-[#cbd5e1]">•</span>
+              <span className="text-[#4f46e5] font-semibold">LAN Host Active</span>
             </div>
           )}
         </div>
@@ -408,18 +413,18 @@ export default function AdminDashboardPage() {
 
             {/* Shadcn Recharts Area Chart: Daily Session Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="lg:col-span-2 bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                    <div className="w-7 h-7 rounded-lg bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
                       <Zap size={15} />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-white">Shadcn UI Session Velocity Chart (30 Days)</h3>
-                      <p className="text-[11px] text-zinc-400">Recharts AreaChart telemetry curve</p>
+                      <h3 className="text-sm font-bold text-[#0f172a]">Shadcn UI Session Velocity Chart (30 Days)</h3>
+                      <p className="text-[11px] text-[#64748b]">Recharts AreaChart telemetry curve</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-zinc-300">
+                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-[#f1f5f9] border border-[#e2e8f0] text-[#64748b]">
                     Recharts Dynamic Engine
                   </span>
                 </div>
@@ -430,19 +435,19 @@ export default function AdminDashboardPage() {
                       <AreaChart data={sessionChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorVelocity" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.5} />
-                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                        <XAxis dataKey="date" stroke="#71717a" fontSize={10} tickLine={false} />
-                        <YAxis stroke="#71717a" fontSize={10} tickLine={false} allowDecimals={false} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
                         <Tooltip content={<ShadcnCustomTooltip />} />
                         <Area
                           type="monotone"
                           dataKey="sessions"
                           name="Candidate Sessions"
-                          stroke="#8b5cf6"
+                          stroke="#4f46e5"
                           strokeWidth={2.5}
                           fillOpacity={1}
                           fill="url(#colorVelocity)"
@@ -454,15 +459,15 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Core Platform Summary */}
-              <div className="bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-5 shadow-xl flex flex-col justify-between">
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-5 shadow-xs flex flex-col justify-between">
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <div className="w-7 h-7 rounded-lg bg-[#dcfce7] border border-[#bbf7d0] flex items-center justify-center text-[#15803d]">
                       <CheckCircle2 size={15} />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-white">System Status Summary</h3>
-                      <p className="text-[11px] text-zinc-400">Autonomous evaluation health</p>
+                      <h3 className="text-sm font-bold text-[#0f172a]">System Status Summary</h3>
+                      <p className="text-[11px] text-[#64748b]">Autonomous evaluation health</p>
                     </div>
                   </div>
 
@@ -470,32 +475,32 @@ export default function AdminDashboardPage() {
                     <SummaryRow
                       label="Evaluation Success Rate"
                       value={`${platform.totalInterviews > 0 ? ((platform.completedInterviews / platform.totalInterviews) * 100).toFixed(1) : 100}%`}
-                      color="text-emerald-400"
+                      color="text-[#15803d]"
                     />
                     <SummaryRow
                       label="Avg Interview Turns"
                       value={scoring.averageTurns ? `${scoring.averageTurns.toFixed(1)} turns` : "—"}
-                      color="text-violet-400"
+                      color="text-[#4338ca]"
                     />
                     <SummaryRow
                       label="Mean Overall Score"
                       value={scoring.meanScore ? `${scoring.meanScore.toFixed(1)} / 100` : "—"}
-                      color="text-cyan-400"
+                      color="text-[#0369a1]"
                     />
                     <SummaryRow
                       label="Questions Assessed"
                       value={String(platform.totalQuestionsEvaluated)}
-                      color="text-amber-400"
+                      color="text-[#b45309]"
                     />
                   </div>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1.5">
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-3.5 space-y-1.5">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-zinc-300">Live K-Score Adaptive Guard</span>
-                    <span className="font-mono text-emerald-400 text-[10px]">ACTIVE</span>
+                    <span className="font-semibold text-[#0f172a]">Live K-Score Adaptive Guard</span>
+                    <span className="font-mono text-[#15803d] text-[10px] font-bold">ACTIVE</span>
                   </div>
-                  <p className="text-[10px] text-zinc-400 leading-relaxed">
+                  <p className="text-[10px] text-[#64748b] leading-relaxed">
                     Brain state engine dynamically computes K-Score during live sessions to adjust question difficulty.
                   </p>
                 </div>
@@ -519,28 +524,28 @@ export default function AdminDashboardPage() {
             {/* Score Distribution & Hiring Recommendation */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Shadcn Recharts Bar Chart: Score Distribution */}
-              <div className="bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                    <div className="w-7 h-7 rounded-lg bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
                       <BarChart3 size={15} />
                     </div>
-                    <h3 className="text-sm font-bold text-white">Shadcn Score Distribution Bar Chart</h3>
+                    <h3 className="text-sm font-bold text-[#0f172a]">Shadcn Score Distribution Bar Chart</h3>
                   </div>
-                  <span className="text-[10px] font-mono text-zinc-400">N={platform.completedInterviews}</span>
+                  <span className="text-[10px] font-mono text-[#64748b]">N={platform.completedInterviews}</span>
                 </div>
 
                 <div className="h-64 w-full pt-2">
                   {isMounted && (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={scoreChartData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                        <XAxis dataKey="shortBucket" stroke="#71717a" fontSize={10} tickLine={false} />
-                        <YAxis stroke="#71717a" fontSize={10} tickLine={false} allowDecimals={false} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="shortBucket" stroke="#64748b" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
                         <Tooltip content={<ShadcnCustomTooltip />} />
-                        <Bar dataKey="count" name="Candidates" fill="#8b5cf6" radius={[6, 6, 0, 0]}>
+                        <Bar dataKey="count" name="Candidates" fill="#4f46e5" radius={[6, 6, 0, 0]}>
                           {scoreChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={index > 5 ? "#6366f1" : "#a855f7"} />
+                            <Cell key={`cell-${index}`} fill={index > 5 ? "#4f46e5" : "#6366f1"} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -550,15 +555,15 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Shadcn Recharts Pie/Donut Chart: Hiring Breakdown */}
-              <div className="bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <div className="w-7 h-7 rounded-lg bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
                       <PieChartIcon size={15} />
                     </div>
-                    <h3 className="text-sm font-bold text-white">Shadcn Hiring Donut Breakdown</h3>
+                    <h3 className="text-sm font-bold text-[#0f172a]">Shadcn Hiring Donut Breakdown</h3>
                   </div>
-                  <span className="text-[10px] font-mono text-zinc-400">Total: {totalRecs}</span>
+                  <span className="text-[10px] font-mono text-[#64748b]">Total: {totalRecs}</span>
                 </div>
 
                 <div className="h-64 w-full flex items-center justify-center relative">
@@ -582,7 +587,7 @@ export default function AdminDashboardPage() {
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p className="text-xs text-zinc-500 italic">No hiring recommendations recorded yet.</p>
+                    <p className="text-xs text-[#94a3b8] italic">No hiring recommendations recorded yet.</p>
                   )}
                 </div>
               </div>
@@ -590,39 +595,39 @@ export default function AdminDashboardPage() {
 
             {/* Answer Quality & Skill Confidence */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                    <div className="w-7 h-7 rounded-lg bg-[#e0f2fe] border border-[#bae6fd] flex items-center justify-center text-[#0284c7]">
                       <HelpCircle size={15} />
                     </div>
-                    <h3 className="text-sm font-bold text-white">Answer Quality Distribution</h3>
+                    <h3 className="text-sm font-bold text-[#0f172a]">Answer Quality Distribution</h3>
                   </div>
-                  <span className="text-[10px] font-mono text-zinc-400">{platform.totalQuestionsEvaluated} answers</span>
+                  <span className="text-[10px] font-mono text-[#64748b]">{platform.totalQuestionsEvaluated} answers</span>
                 </div>
 
                 <div className="h-48 w-full pt-2">
                   {isMounted && qualityChartData.length > 0 && (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={qualityChartData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                        <XAxis type="number" stroke="#71717a" fontSize={10} tickLine={false} />
-                        <YAxis dataKey="quality" type="category" stroke="#71717a" fontSize={10} tickLine={false} width={80} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} />
+                        <YAxis dataKey="quality" type="category" stroke="#64748b" fontSize={11} tickLine={false} width={80} />
                         <Tooltip content={<ShadcnCustomTooltip />} />
-                        <Bar dataKey="count" name="Answers" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="count" name="Answers" fill="#0284c7" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
                 </div>
               </div>
 
-              <div className="bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl flex flex-col justify-between">
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-4 shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                    <div className="w-7 h-7 rounded-lg bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
                       <TrendingUp size={15} />
                     </div>
-                    <h3 className="text-sm font-bold text-white">Skill Confidence Breakdown</h3>
+                    <h3 className="text-sm font-bold text-[#0f172a]">Skill Confidence Breakdown</h3>
                   </div>
                 </div>
 
@@ -632,7 +637,7 @@ export default function AdminDashboardPage() {
                   <ConfidenceBadge label="Low Confidence" count={skillConfidences.low} color="rose" />
                 </div>
 
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-[11px] text-zinc-400 leading-relaxed">
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-3 text-[11px] text-[#64748b] leading-relaxed">
                   Evaluated across candidate project claims and live technical response depth.
                 </div>
               </div>
@@ -643,19 +648,19 @@ export default function AdminDashboardPage() {
         {/* ── TAB 3: RESEARCH METRICS (FOR RESEARCH PAPER & VIVA) ───────────── */}
         {activeTab === "research" && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="bg-[#141417] border border-violet-500/30 rounded-2xl p-6 space-y-4 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="bg-white border border-indigo-200/80 rounded-2xl p-6 space-y-4 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/60 rounded-full blur-3xl -z-10 pointer-events-none" />
+              <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-300">
+                  <div className="w-9 h-9 rounded-xl bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
                     <Database size={18} />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Research-Grade Evaluation Metrics Suite</h3>
-                    <p className="text-xs text-zinc-400">Standardized AI model performance metrics for research publication</p>
+                    <h3 className="text-base font-bold text-[#0f172a]">Research-Grade Evaluation Metrics Suite</h3>
+                    <p className="text-xs text-[#64748b]">Standardized AI model performance metrics for research publication</p>
                   </div>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-xs font-mono text-violet-300">
+                <span className="px-3 py-1 rounded-full bg-[#eef2ff] border border-[#c7d2fe] text-xs font-mono text-[#4338ca] font-semibold">
                   `src/eval/metrics.ts`
                 </span>
               </div>
@@ -729,21 +734,21 @@ export default function AdminDashboardPage() {
                 ].map((item) => (
                   <div
                     key={item.title}
-                    className={`bg-[#09090b] border ${item.active ? "border-emerald-500/40 bg-emerald-950/10" : "border-white/10"} rounded-xl p-4 space-y-2 flex flex-col justify-between hover:border-violet-500/40 transition-all`}
+                    className={`bg-[#f8fafc] border ${item.active ? "border-emerald-200 bg-emerald-50/50" : "border-[#e2e8f0]"} rounded-xl p-4 space-y-2 flex flex-col justify-between hover:border-indigo-300 transition-all`}
                   >
                     <div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono font-bold text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20">
+                        <span className="text-xs font-mono font-bold text-[#4338ca] bg-[#e0e7ff] px-2 py-0.5 rounded border border-[#c7d2fe]">
                           {item.symbol}
                         </span>
-                        <span className="text-[10px] font-mono text-zinc-500 uppercase">{item.category}</span>
+                        <span className="text-[10px] font-mono text-[#64748b] uppercase">{item.category}</span>
                       </div>
-                      <h4 className="text-xs font-bold text-white mt-2">{item.title}</h4>
-                      <p className="text-[11px] text-zinc-400 mt-1 leading-snug">{item.desc}</p>
+                      <h4 className="text-xs font-bold text-[#0f172a] mt-2">{item.title}</h4>
+                      <p className="text-[11px] text-[#475569] mt-1 leading-snug">{item.desc}</p>
                     </div>
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-                      <span className="text-[10px] font-mono text-zinc-400">{item.status}</span>
-                      <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${item.active ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}>
+                    <div className="pt-2 border-t border-[#e2e8f0] flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-[#64748b]">{item.status}</span>
+                      <span className={`text-[9px] font-mono px-2 py-0.5 rounded font-semibold ${item.active ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
                         {item.active ? "Enabled" : "Eval Data Pending"}
                       </span>
                     </div>
@@ -751,13 +756,13 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
 
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2 text-xs text-zinc-300">
-                <div className="flex items-center gap-2 text-violet-300 font-semibold">
+              <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4 space-y-2 text-xs text-[#334155]">
+                <div className="flex items-center gap-2 text-[#4338ca] font-semibold">
                   <Info size={15} />
                   <span>How to Populate Research Metrics for Publication</span>
                 </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  To generate full statistical report tables for research papers, populate <code className="text-violet-300 bg-violet-950/50 px-1.5 py-0.5 rounded border border-violet-800/50">eval-data/</code> with human-annotated CSV transcripts and execute <code className="text-violet-300 bg-violet-950/50 px-1.5 py-0.5 rounded border border-violet-800/50">npm run eval:report</code>.
+                <p className="text-[11px] text-[#64748b] leading-relaxed">
+                  To generate full statistical report tables for research papers, populate <code className="text-[#4338ca] bg-[#e0e7ff] px-1.5 py-0.5 rounded border border-[#c7d2fe]">eval-data/</code> with human-annotated CSV transcripts and execute <code className="text-[#4338ca] bg-[#e0e7ff] px-1.5 py-0.5 rounded border border-[#c7d2fe]">npm run eval:report</code>.
                 </p>
               </div>
             </div>
@@ -767,18 +772,18 @@ export default function AdminDashboardPage() {
         {/* ── TAB 4: CANDIDATE PHOTOS ───────────────────────────────────────── */}
         {activeTab === "snapshots" && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-6 shadow-xl">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-6 shadow-xs">
+              <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
+                  <div className="w-9 h-9 rounded-xl bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5]">
                     <Camera size={18} />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Candidate Camera Snapshots</h3>
-                    <p className="text-xs text-zinc-400">Real-time webcam captures recorded during candidate interview sessions</p>
+                    <h3 className="text-base font-bold text-[#0f172a]">Candidate Camera Snapshots</h3>
+                    <p className="text-xs text-[#64748b]">Real-time webcam captures recorded during candidate interview sessions</p>
                   </div>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-xs font-mono text-violet-300">
+                <span className="px-3 py-1 rounded-full bg-[#eef2ff] border border-[#c7d2fe] text-xs font-mono text-[#4338ca] font-semibold">
                   {data.candidateSnapshots?.length || 0} Sessions Captured
                 </span>
               </div>
@@ -788,9 +793,9 @@ export default function AdminDashboardPage() {
                   {data.candidateSnapshots.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-[#09090b] border border-white/10 rounded-xl overflow-hidden shadow-lg flex flex-col justify-between hover:border-violet-500/40 transition-all group"
+                      className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden shadow-xs flex flex-col justify-between hover:border-indigo-300 transition-all group"
                     >
-                      <div className="relative aspect-video bg-zinc-900 overflow-hidden flex items-center justify-center">
+                      <div className="relative aspect-video bg-slate-100 overflow-hidden flex items-center justify-center">
                         {item.candidateSnapshot ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -799,19 +804,19 @@ export default function AdminDashboardPage() {
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
-                          <div className="flex flex-col items-center gap-2 text-zinc-600">
+                          <div className="flex flex-col items-center gap-2 text-[#94a3b8]">
                             <Users size={28} />
                             <span className="text-[10px] font-mono">No Photo Captured</span>
                           </div>
                         )}
-                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[10px] font-mono text-zinc-300">
+                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-white/90 backdrop-blur-md border border-[#e2e8f0] text-[10px] font-mono text-[#0f172a] font-semibold shadow-xs">
                           {item.score !== null ? `${item.score}/100` : item.status}
                         </div>
                       </div>
-                      <div className="p-3.5 space-y-1 bg-[#141417]">
-                        <h4 className="text-xs font-bold text-white truncate">{item.candidateName}</h4>
-                        <p className="text-[11px] text-zinc-400 truncate">{item.jobRole}</p>
-                        <p className="text-[10px] text-zinc-500 font-mono pt-1">
+                      <div className="p-3.5 space-y-1 bg-white border-t border-[#f1f5f9]">
+                        <h4 className="text-xs font-bold text-[#0f172a] truncate">{item.candidateName}</h4>
+                        <p className="text-[11px] text-[#64748b] truncate">{item.jobRole}</p>
+                        <p className="text-[10px] text-[#94a3b8] font-mono pt-1">
                           {new Date(item.createdAt).toLocaleDateString()} • {new Date(item.createdAt).toLocaleTimeString()}
                         </p>
                       </div>
@@ -820,65 +825,64 @@ export default function AdminDashboardPage() {
                 </div>
               ) : (
                 <div className="text-center py-12 space-y-3">
-                  <Camera size={36} className="text-zinc-600 mx-auto" />
-                  <p className="text-xs text-zinc-400">No candidate webcam snapshots recorded yet.</p>
+                  <Camera size={36} className="text-[#94a3b8] mx-auto" />
+                  <p className="text-xs text-[#64748b]">No candidate webcam snapshots recorded yet.</p>
                 </div>
               )}
             </div>
           </div>
         )}
-
         {/* ── TAB 5: NETWORK & SECURITY ────────────────────────────────────── */}
         {activeTab === "network" && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="bg-[#141417] border border-white/10 rounded-2xl p-6 space-y-6 shadow-xl">
-              <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-6 space-y-6 shadow-xs">
+              <div className="flex items-center gap-3 border-b border-[#e2e8f0] pb-4">
+                <div className="w-9 h-9 rounded-xl bg-[#dcfce7] border border-[#bbf7d0] flex items-center justify-center text-[#15803d]">
                   <Globe size={18} />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Network & Security Diagnostics</h3>
-                  <p className="text-xs text-zinc-400">Local network access, IP restrictions, and admin authorization</p>
+                  <h3 className="text-base font-bold text-[#0f172a]">Network & Security Diagnostics</h3>
+                  <p className="text-xs text-[#64748b]">Local network access, IP restrictions, and admin authorization</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-[#09090b] border border-white/10 rounded-xl p-4 space-y-3">
-                  <span className="text-xs font-bold text-white flex items-center gap-2">
-                    <Wifi size={14} className="text-emerald-400" />
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4 space-y-3">
+                  <span className="text-xs font-bold text-[#0f172a] flex items-center gap-2">
+                    <Wifi size={14} className="text-[#15803d]" />
                     Network Connection Context
                   </span>
                   <div className="space-y-2 text-xs font-mono">
-                    <div className="flex justify-between py-1 border-b border-white/5 text-zinc-400">
+                    <div className="flex justify-between py-1 border-b border-[#e2e8f0] text-[#64748b]">
                       <span>Client IP:</span>
-                      <span className="text-white">{clientNetwork?.clientIp || "127.0.0.1"}</span>
+                      <span className="text-[#0f172a] font-semibold">{clientNetwork?.clientIp || "127.0.0.1"}</span>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-white/5 text-zinc-400">
+                    <div className="flex justify-between py-1 border-b border-[#e2e8f0] text-[#64748b]">
                       <span>Host Mode:</span>
-                      <span className="text-emerald-400">{clientNetwork?.isLocalhost ? "Localhost / Loopback" : "LAN Remote IP"}</span>
+                      <span className="text-[#15803d] font-semibold">{clientNetwork?.isLocalhost ? "Localhost / Loopback" : "LAN Remote IP"}</span>
                     </div>
-                    <div className="flex justify-between py-1 text-zinc-400">
+                    <div className="flex justify-between py-1 text-[#64748b]">
                       <span>LAN Access Command:</span>
-                      <span className="text-violet-300">npm run dev:network</span>
+                      <span className="text-[#4338ca] font-semibold">npm run dev:network</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-[#09090b] border border-white/10 rounded-xl p-4 space-y-3">
-                  <span className="text-xs font-bold text-white flex items-center gap-2">
-                    <Shield size={14} className="text-violet-400" />
+                <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-4 space-y-3">
+                  <span className="text-xs font-bold text-[#0f172a] flex items-center gap-2">
+                    <Shield size={14} className="text-[#4f46e5]" />
                     Security Guard Policies
                   </span>
                   <div className="space-y-2 text-xs font-mono">
-                    <div className="flex justify-between py-1 border-b border-white/5 text-zinc-400">
+                    <div className="flex justify-between py-1 border-b border-[#e2e8f0] text-[#64748b]">
                       <span>Clerk Admin ID Guard:</span>
-                      <span className={clientNetwork?.adminUserIdsConfigured ? "text-emerald-400" : "text-amber-400"}>
+                      <span className={clientNetwork?.adminUserIdsConfigured ? "text-[#15803d] font-semibold" : "text-[#b45309] font-semibold"}>
                         {clientNetwork?.adminUserIdsConfigured ? "ENABLED (ADMIN_USER_IDS)" : "DEFAULT (ALLOW ALL SIGNED-IN)"}
                       </span>
                     </div>
-                    <div className="flex justify-between py-1 text-zinc-400">
+                    <div className="flex justify-between py-1 text-[#64748b]">
                       <span>IP Allowlist Restriction:</span>
-                      <span className={clientNetwork?.allowedIpsConfigured ? "text-emerald-400" : "text-zinc-500"}>
+                      <span className={clientNetwork?.allowedIpsConfigured ? "text-[#15803d] font-semibold" : "text-[#94a3b8] font-semibold"}>
                         {clientNetwork?.allowedIpsConfigured ? "ACTIVE (ALLOWED_ADMIN_IPS)" : "INACTIVE (ALL IPS ALLOWED)"}
                       </span>
                     </div>
@@ -888,18 +892,17 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         )}
-
         {/* Footer Data Source Note */}
-        <div className="bg-[#141417] border border-white/10 rounded-xl p-4 flex items-start gap-3 text-xs text-zinc-400">
-          <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+        <div className="bg-white border border-[#e2e8f0] rounded-xl p-4 flex items-start gap-3 text-xs text-[#64748b] shadow-xs">
+          <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="leading-relaxed">
-              <strong className="text-zinc-200">Data Source Notice:</strong> Metrics displayed are computed from{" "}
-              <strong className="text-white">{platform.completedInterviews}</strong> completed sessions,{" "}
-              <strong className="text-white">{platform.totalTranscriptChunks}</strong> transcript turns, and{" "}
-              <strong className="text-white">{platform.totalAuditEvents}</strong> audit events stored in PostgreSQL.
+              <strong className="text-[#0f172a]">Data Source Notice:</strong> Metrics displayed are computed from{" "}
+              <strong className="text-[#0f172a]">{platform.completedInterviews}</strong> completed sessions,{" "}
+              <strong className="text-[#0f172a]">{platform.totalTranscriptChunks}</strong> transcript turns, and{" "}
+              <strong className="text-[#0f172a]">{platform.totalAuditEvents}</strong> audit events stored in PostgreSQL.
             </p>
-            <p className="text-[10px] text-zinc-500 font-mono">
+            <p className="text-[10px] text-[#94a3b8] font-mono">
               Generated at {new Date(data.generatedAt).toLocaleString()} • PrepAI Platform v1.0
             </p>
           </div>
@@ -921,10 +924,10 @@ interface TooltipItem {
 function ShadcnCustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipItem[]; label?: string }) {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#141417] border border-white/15 rounded-xl p-3 shadow-2xl space-y-1 text-xs backdrop-blur-md">
-        <p className="text-[11px] font-mono text-zinc-400 uppercase">{label}</p>
+      <div className="bg-white border border-[#e2e8f0] rounded-xl p-3 shadow-xl space-y-1 text-xs backdrop-blur-md text-[#0f172a]">
+        <p className="text-[11px] font-mono text-[#64748b] uppercase">{label}</p>
         {payload.map((entry: TooltipItem, index: number) => (
-          <p key={`item-${index}`} className="font-bold text-white flex items-center gap-2">
+          <p key={`item-${index}`} className="font-bold text-[#0f172a] flex items-center gap-2">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
             <span>{entry.name}: {entry.value}</span>
           </p>
@@ -953,59 +956,59 @@ function StatCard({
   trend?: string;
 }) {
   const borderMap = {
-    violet: "border-violet-500/20 hover:border-violet-500/40",
-    cyan: "border-cyan-500/20 hover:border-cyan-500/40",
-    amber: "border-amber-500/20 hover:border-amber-500/40",
-    emerald: "border-emerald-500/20 hover:border-emerald-500/40",
+    violet: "border-[#e2e8f0] hover:border-indigo-300",
+    cyan: "border-[#e2e8f0] hover:border-sky-300",
+    amber: "border-[#e2e8f0] hover:border-amber-300",
+    emerald: "border-[#e2e8f0] hover:border-emerald-300",
   };
 
   const iconMap = {
-    violet: "text-violet-400 bg-violet-500/10 border-violet-500/20",
-    cyan: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
-    amber: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-    emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    violet: "text-[#4f46e5] bg-[#eef2ff] border-[#c7d2fe]",
+    cyan: "text-[#0284c7] bg-[#e0f2fe] border-[#bae6fd]",
+    amber: "text-[#b45309] bg-[#fef3c7] border-[#fde68a]",
+    emerald: "text-[#15803d] bg-[#dcfce7] border-[#bbf7d0]",
   };
 
   return (
-    <div className={`bg-[#141417] border ${borderMap[color]} rounded-2xl p-5 space-y-3 shadow-xl transition-all`}>
+    <div className={`bg-white border ${borderMap[color]} rounded-2xl p-5 space-y-3 shadow-xs transition-all`}>
       <div className="flex items-center justify-between">
         <div className={`w-9 h-9 rounded-xl border flex items-center justify-center ${iconMap[color]}`}>
           {icon}
         </div>
         {trend && (
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold">
             {trend}
           </span>
         )}
       </div>
       <div>
-        <p className="text-2xl font-extrabold text-white tracking-tight">{value.toLocaleString()}</p>
-        <p className="text-xs font-semibold text-zinc-300 mt-0.5">{label}</p>
+        <p className="text-2xl font-extrabold text-[#0f172a] tracking-tight">{value.toLocaleString()}</p>
+        <p className="text-xs font-semibold text-[#475569] mt-0.5">{label}</p>
       </div>
-      <p className="text-[10px] text-zinc-400 leading-snug">{sub}</p>
+      <p className="text-[10px] text-[#64748b] leading-snug">{sub}</p>
     </div>
   );
 }
 
 function MetricBox({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
-    <div className="bg-[#141417] border border-white/10 rounded-xl p-4 text-center space-y-1 shadow-lg">
-      <p className="text-[10px] text-zinc-400 font-mono uppercase tracking-wider">{label}</p>
-      <p className="text-xl font-extrabold text-white">{value}</p>
-      <p className="text-[10px] text-zinc-500">{unit}</p>
+    <div className="bg-white border border-[#e2e8f0] rounded-xl p-4 text-center space-y-1 shadow-xs">
+      <p className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider">{label}</p>
+      <p className="text-xl font-extrabold text-[#0f172a]">{value}</p>
+      <p className="text-[10px] text-[#94a3b8]">{unit}</p>
     </div>
   );
 }
 
 function ConfidenceBadge({ label, count, color }: { label: string; count: number; color: "emerald" | "amber" | "rose" }) {
   const styles = {
-    emerald: "border-emerald-500/30 text-emerald-400 bg-emerald-500/10",
-    amber: "border-amber-500/30 text-amber-400 bg-amber-500/10",
-    rose: "border-rose-500/30 text-rose-400 bg-rose-500/10",
+    emerald: "border-emerald-200 text-emerald-700 bg-emerald-50",
+    amber: "border-amber-200 text-amber-700 bg-amber-50",
+    rose: "border-rose-200 text-rose-700 bg-rose-50",
   };
 
   return (
-    <div className={`border rounded-xl p-3 text-center space-y-1 ${styles[color]}`}>
+    <div className={`border rounded-xl p-3 text-center space-y-1 font-semibold ${styles[color]}`}>
       <p className="text-2xl font-extrabold">{count}</p>
       <p className="text-[10px] font-mono uppercase tracking-wider">{label}</p>
     </div>
@@ -1014,8 +1017,8 @@ function ConfidenceBadge({ label, count, color }: { label: string; count: number
 
 function SummaryRow({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="flex justify-between items-center text-xs py-1.5 border-b border-white/5">
-      <span className="text-zinc-400 font-medium">{label}</span>
+    <div className="flex justify-between items-center text-xs py-1.5 border-b border-[#f1f5f9]">
+      <span className="text-[#64748b] font-medium">{label}</span>
       <span className={`font-mono font-bold ${color}`}>{value}</span>
     </div>
   );

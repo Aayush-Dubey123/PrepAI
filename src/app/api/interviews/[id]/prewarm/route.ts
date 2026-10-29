@@ -40,9 +40,19 @@ export async function POST(
       return NextResponse.json({ error: "Interview not found" }, { status: 404 });
     }
 
-    // Optional user authorization check if userId is available
-    if (userId && interview.userId && interview.userId !== userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const cookieHeader =
+      req.cookies.get("prepai_interview_ids")?.value ??
+      req.cookies.get("intervia_interview_ids")?.value ??
+      "";
+    const cookieIds = cookieHeader.split(",").map((s) => s.trim()).filter(Boolean);
+
+    const isOwner = Boolean(
+      (userId && interview.userId === userId) ||
+      cookieIds.includes(interviewId)
+    );
+
+    if (!isOwner) {
+      return NextResponse.json({ error: "Forbidden: Not session owner" }, { status: 403 });
     }
 
     // 2. Load resume structured data if available

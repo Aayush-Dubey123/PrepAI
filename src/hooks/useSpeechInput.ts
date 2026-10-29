@@ -109,6 +109,11 @@ export function useSpeechInput({
       const { resultIndex, results } = event;
       const currentResult = results[resultIndex];
 
+      // Instant barge-in: cancel AI speech the moment candidate speech is detected
+      if (currentResult?.[0]?.transcript?.trim()) {
+        onBargeIn?.();
+      }
+
       if (currentResult?.isFinal) {
         const finalText = currentResult[0]?.transcript || "";
         setInterimTranscript("");

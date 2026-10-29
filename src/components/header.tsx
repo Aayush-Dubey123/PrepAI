@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
@@ -13,7 +13,22 @@ export function Header() {
   const router = useRouter();
   const [showAbout, setShowAbout] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
+  useEffect(() => {
+    let ignore = false;
+    fetch("/api/admin/check")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!ignore && data?.isAdmin) {
+          setIsAdmin(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, []);
   // 1. Marketing Mode: strictly root ("/")
   const isMarketing = pathname === "/";
 
@@ -24,8 +39,8 @@ export function Header() {
   const isLiveStage =
     pathname.startsWith("/interview/") && !isLobby && !isFeedback;
 
-  if (isLiveStage || pathname === "/admin" || pathname === "/dashboard") {
-    // Return null to prevent duplicate headers on live stage, admin, and dashboard cockpit
+  if (isLiveStage || pathname === "/admin" || pathname === "/dashboard" || pathname === "/analytics") {
+    // Return null to prevent duplicate headers on live stage, admin, dashboard, and analytics cockpit
     return null;
   }
 
@@ -145,10 +160,17 @@ export function Header() {
               </>
             )}
 
+            {pathname === "/analytics" && (
+              <>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
+                <span className="text-[#4f46e5] font-semibold">Performance Analytics</span>
+              </>
+            )}
+
             {pathname === "/admin" && (
               <>
                 <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
-                <span className="text-[#4f46e5] font-semibold">Analytics Console</span>
+                <span className="text-[#4f46e5] font-semibold">Admin Telemetry</span>
               </>
             )}
           </div>
@@ -169,9 +191,9 @@ export function Header() {
           </Link>
 
           <Link
-            href="/admin"
+            href="/analytics"
             className={`flex items-center gap-1.5 transition-colors px-2.5 py-1.5 rounded-lg ${
-              pathname === "/admin"
+              pathname === "/analytics"
                 ? "bg-[#eef2ff] text-[#4f46e5] font-semibold"
                 : "text-[#64748b] hover:text-[#0f172a]"
             }`}
@@ -180,6 +202,19 @@ export function Header() {
             <span className="hidden md:inline">Analytics</span>
           </Link>
 
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-1.5 transition-colors px-2.5 py-1.5 rounded-lg ${
+                pathname === "/admin"
+                  ? "bg-[#eef2ff] text-[#4f46e5] font-semibold"
+                  : "text-[#64748b] hover:text-[#0f172a]"
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Admin</span>
+            </Link>
+          )}
           <div className="h-4 w-px bg-[#e2e8f0] mx-1" />
           <UserButton />
         </div>

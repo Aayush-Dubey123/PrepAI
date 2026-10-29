@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useWebcamStream } from "@/src/hooks/useWebcamStream";
 import { useAudioPlayback } from "@/src/hooks/useAudioPlayback";
@@ -25,7 +25,41 @@ export default function InterviewStagePage() {
   const [showEndModal, setShowEndModal] = useState(false);
   const [isEndingSession, setIsEndingSession] = useState(false);
 
-  // 1. Audio Playback Controller (Barge-in + Sarvam/Browser TTS)
+  // Fullscreen Proctoring Mode Controller
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreenSupported, setIsFullscreenSupported] = useState(true);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const supported = Boolean(
+        document.fullscreenEnabled ||
+          (document as unknown as { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled
+      );
+      setIsFullscreenSupported(supported);
+
+      const handleFullscreenChange = () => {
+        setIsFullscreen(Boolean(document.fullscreenElement));
+      };
+
+      document.addEventListener("fullscreenchange", handleFullscreenChange);
+      return () => {
+        document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      };
+    }
+  }, []);
+
+  const handleToggleFullscreen = async () => {
+    if (typeof document === "undefined") return;
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      console.warn("[FULLSCREEN] Toggle failed or blocked by policy:", err);
+    }
+  };
   const { isAiSpeaking, speakText, stopAiSpeech } = useAudioPlayback({
     onLatencyLog: (stage) => {
       orchestrator.sendClientLatencyLog(stage);
@@ -81,7 +115,7 @@ export default function InterviewStagePage() {
     void orchestrator.endSession("integrity");
   }, [orchestrator]);
 
-  const { strikes, warning, isTerminated } = useIntegrityMonitor({
+  const { strikes, warning, guidance, isTerminated } = useIntegrityMonitor({
     interviewId,
     mediaStream,
     videoRef,
@@ -116,8 +150,22 @@ export default function InterviewStagePage() {
   const candidateName =
     orchestrator.candidateProfile?.fullName?.split(" ")[0] || "Candidate";
 
+  // Extract latest AI message accurately for persistent interviewer dialogue card
+  const latestAiEntry = orchestrator.transcript
+    .slice()
+    .reverse()
+    .find((entry) => entry.speaker === "ai");
+  const currentPrompt = latestAiEntry ? latestAiEntry.text : null;
   return (
-    <div className="h-dvh w-full overflow-hidden flex flex-col bg-[#09090b] text-[#fafafa] font-sans select-none relative">
+    <div className="h-dvh w-full overflow-hidden flex flex-col bg-[#f4f6fa] text-[#0f172a] font-sans select-none relative">
+      {/* Ambient background glow */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse at center, rgba(99, 102, 241, 0.06) 0%, transparent 70%)",
+        }}
+      />
+
       {/* 1. Header Ribbon */}
       <InterviewHeader
         jobRole={orchestrator.jobRole}
@@ -127,10 +175,18 @@ export default function InterviewStagePage() {
         maxStrikes={3}
         onEndCall={() => setShowEndModal(true)}
         aiProvider={orchestrator.aiProvider}
+        isFullscreen={isFullscreen}
+        isFullscreenSupported={isFullscreenSupported}
+        onToggleFullscreen={handleToggleFullscreen}
       />
 
-      {/* 2. Integrity Strike Alert Banner */}
-      <IntegrityAlertBanner warning={warning} isTerminated={isTerminated} />
+      {/* 2. Integrity Strike & Guidance Banner */}
+      <IntegrityAlertBanner
+        warning={warning}
+        guidance={guidance}
+        isTerminated={isTerminated}
+        onRestoreFullscreen={handleToggleFullscreen}
+      />
 
       {/* 3. Main Stage: Twin Tile Layout */}
       <main className="flex-1 min-h-0 p-3 sm:p-6 flex flex-col justify-between overflow-hidden">
@@ -140,6 +196,8 @@ export default function InterviewStagePage() {
             turnState={orchestrator.turnState}
             isAiThinking={orchestrator.isAiThinking}
             aiProvider={orchestrator.aiProvider}
+            currentPrompt={currentPrompt}
+            currentPhase={orchestrator.currentPhase}
           />
 
           {/* Right Tile: Candidate Camera & Feed */}

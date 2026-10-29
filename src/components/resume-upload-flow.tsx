@@ -59,9 +59,9 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
 
   const processFile = async (selectedFile: File) => {
     const ext = selectedFile.name.toLowerCase().split(".").pop();
-    const validExts = ["pdf", "docx", "txt", "md"];
+    const validExts = ["pdf", "docx", "doc", "txt", "md", "text", "markdown", "rtf", "odt", "html", "htm"];
     if (!ext || !validExts.includes(ext)) {
-      setError("Please upload a valid document (.pdf, .docx, .txt, or .md).");
+      setError("Please upload a supported document (.pdf, .docx, .doc, .rtf, .odt, .txt, or .md).");
       return;
     }
 
@@ -97,9 +97,14 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
         throw new Error(data.error || "Failed to parse resume with AI");
       }
 
-      setResumeId(data.id);
+      setResumeId(data.id || DUMMY_RESUME_ID);
       if (data.structuredData) {
         setCandidateProfile(data.structuredData);
+      }
+      if (data.warning) {
+        setError(data.warning);
+      } else {
+        setError(null);
       }
       setStep("confirm");
     } catch (err: unknown) {
@@ -109,6 +114,7 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
           ? err.message
           : "An error occurred while analyzing your resume. You can manually edit your profile below.";
       setError(msg);
+      setResumeId((prev) => (prev && prev !== DUMMY_RESUME_ID ? prev : DUMMY_RESUME_ID));
       setStep("confirm");
     }
   };
@@ -345,7 +351,7 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
-                accept=".pdf,.docx,.txt,.md"
+                accept=".pdf,.docx,.doc,.txt,.md,.text,.markdown,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/rtf,application/vnd.oasis.opendocument.text"
                 className="hidden"
               />
 
@@ -366,7 +372,7 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
                 </span>
               </h3>
               <p className="mt-1 text-xs text-[#64748b] max-w-sm leading-relaxed">
-                Accepts, pdf, docx, txt, or md (max 5MB). AI extracts your profile, projects, and target competencies.
+                Accepts PDF, DOCX, DOC, RTF, TXT, MD, and ODT (max 5MB). AI extracts your profile, projects, and target competencies.
               </p>
 
               {/* Bottom Quick Action Pills from Image #1 */}

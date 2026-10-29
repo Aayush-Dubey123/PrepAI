@@ -80,6 +80,47 @@ export interface IntegrityDetectorCallbacks {
     faceCount: number;
     detectedObjects: string[];
   }) => void;
+  onGuidanceNudge?: (nudge: {
+    type: "no_face" | "multiple_faces" | "gaze_away" | "tab_switch" | "fullscreen_exit" | "face_restored";
+    message: string;
+    details?: string;
+  }) => void;
+}
+/**
+ * Suppress benign TensorFlow Lite / XNNPACK informational notices routed to
+ * console.error by Emscripten's stderr stream.
+ *
+ * MediaPipe's WebAssembly TFLite core logs "INFO: Created TensorFlow Lite XNNPACK delegate for CPU."
+ * to stderr upon first inference. Because Emscripten routes stderr to window.console.error,
+ * Next.js dev server intercepts this as an unhandled error overlay. We redirect these benign
+ * informational lines to console.info.
+ */
+let isConsolePatched = false;
+
+export function installTfLiteConsoleFilter(): void {
+  if (typeof window === "undefined" || isConsolePatched) return;
+  isConsolePatched = true;
+
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    const firstArg = args[0];
+    const message = typeof firstArg === "string" ? firstArg : "";
+
+    // Intercept benign TFLite informational messages routed to stderr by Emscripten
+    if (
+      message.includes("TensorFlow Lite XNNPACK delegate") ||
+      message.includes("Created TensorFlow Lite") ||
+      (message.startsWith("INFO:") &&
+        (message.includes("TensorFlow Lite") ||
+          message.includes("tflite") ||
+          message.includes("XNNPACK")))
+    ) {
+      console.info(...args);
+      return;
+    }
+
+    originalConsoleError.apply(console, args);
+  };
 }
 
 export class IntegrityDetector {
@@ -95,9 +136,14 @@ export class IntegrityDetector {
   private canvasAnimId: number | null = null;
   private isProcessingFaceFrame = false;
 
-  private lastFaceTimestamp = 0;
-  private lastObjectTimestamp = 0;
+  // Dedicated wall-clock timestamp (performance.now()) for inference throttle cadence
+  private lastFaceInferenceTime = 0;
+  // Dedicated monotonically increasing timestamp strictly for MediaPipe detectForVideo
+  private lastMediaPipeTimestamp = 0;
 
+  // Same dedicated separation for object detector
+  private lastObjectInferenceTime = 0;
+  private lastObjectMediaPipeTimestamp = 0;
   private startTime: number = Date.now();
   private isAiSpeaking = false;
 
@@ -107,8 +153,8 @@ export class IntegrityDetector {
     timestamp: Date.now(),
   };
 
-  // Debounce tracking map: conditionName -> startTime
-  private activeConditions: Map<string, number> = new Map();
+  // Debounce tracking map: conditionName -> { firstSeenTime, lastSeenTime }
+  private activeConditions: Map<string, { firstSeenTime: number; lastSeenTime: number }> = new Map();
   // Fired violation cooldowns to prevent spamming duplicate events
   private firedCooldowns: Map<string, number> = new Map();
 
@@ -136,6 +182,7 @@ export class IntegrityDetector {
 
   constructor(callbacks: IntegrityDetectorCallbacks) {
     this.callbacks = callbacks;
+    installTfLiteConsoleFilter();
   }
 
   /**
@@ -165,8 +212,8 @@ export class IntegrityDetector {
    * Initialize MediaPipe vision models from self-hosted /public assets with GPU delegate fallback to CPU
    */
   public async initialize(): Promise<boolean> {
+    installTfLiteConsoleFilter();
     try {
-      console.log("[INTEGRITY] Resolving MediaPipe vision WASM from:", INTEGRITY_CONFIG.wasmLoaderPath);
       const vision = await FilesetResolver.forVisionTasks(INTEGRITY_CONFIG.wasmLoaderPath);
 
       // FaceLandmarker: GPU delegate with CPU fallback, numFaces: 2, blendshapes & matrixes enabled
@@ -260,13 +307,14 @@ export class IntegrityDetector {
     let offCenterCount = 0;
     let tooSmallCount = 0;
 
+    let lastCalibTimestamp = 0;
+
     return new Promise<CalibrationData>((resolve, reject) => {
       const stepCalibration = () => {
         if (!this.isCalibrating) {
           reject(new Error("Calibration cancelled"));
           return;
         }
-
         const now = performance.now();
         const elapsed = now - startTime;
         const progressPercent = Math.min(100, Math.round((elapsed / durationMs) * 100));
@@ -275,10 +323,15 @@ export class IntegrityDetector {
           video.readyState >= 2 &&
           video.videoWidth > 0 &&
           video.videoHeight > 0 &&
+          video.currentTime > 0 &&
           !video.paused
         ) {
           try {
-            const timestamp = Math.round(now);
+            let timestamp = Math.round(now);
+            if (timestamp <= lastCalibTimestamp) {
+              timestamp = lastCalibTimestamp + 1;
+            }
+            lastCalibTimestamp = timestamp;
             const results = this.faceLandmarker!.detectForVideo(video, timestamp);
             const faceCount = results.faceLandmarks ? results.faceLandmarks.length : 0;
             totalFrames++;
@@ -376,8 +429,10 @@ export class IntegrityDetector {
     this.videoElement = video;
     this.isRunning = true;
     this.startTime = Date.now();
-    this.lastFaceTimestamp = 0;
-    this.lastObjectTimestamp = 0;
+    this.lastFaceInferenceTime = 0;
+    this.lastMediaPipeTimestamp = 0;
+    this.lastObjectInferenceTime = 0;
+    this.lastObjectMediaPipeTimestamp = 0;
     this.activeConditions.clear();
     this.firedCooldowns.clear();
 
@@ -471,7 +526,7 @@ export class IntegrityDetector {
   }
 
   /**
-   * Face Detection Loop (~20-30 FPS aligned with requestVideoFrameCallback)
+   * Face Detection Loop (~15-20 FPS decoupled from video rendering)
    */
   private runFaceDetectionLoop = () => {
     if (!this.isRunning) return;
@@ -479,25 +534,30 @@ export class IntegrityDetector {
     const processFrame = () => {
       if (!this.isRunning) return;
 
+      const intervalMs = 66; // ~15 FPS: 66ms leaves ~40ms free main-thread time per frame window
+      const now = performance.now();
+
       if (
         this.faceLandmarker &&
         this.videoElement &&
         this.videoElement.readyState >= 2 &&
         this.videoElement.videoWidth > 0 &&
         this.videoElement.videoHeight > 0 &&
+        this.videoElement.currentTime > 0 &&
         !this.videoElement.paused &&
         !this.videoElement.ended
       ) {
-        if (!this.isProcessingFaceFrame) {
+        if (!this.isProcessingFaceFrame && now - this.lastFaceInferenceTime >= intervalMs) {
           this.isProcessingFaceFrame = true;
+          this.lastFaceInferenceTime = now;
           try {
-            let now = Math.round(performance.now());
-            if (now <= this.lastFaceTimestamp) {
-              now = this.lastFaceTimestamp + 1;
+            let mpTimestamp = Math.round(now);
+            if (mpTimestamp <= this.lastMediaPipeTimestamp) {
+              mpTimestamp = this.lastMediaPipeTimestamp + 1;
             }
-            this.lastFaceTimestamp = now;
+            this.lastMediaPipeTimestamp = mpTimestamp;
 
-            const results = this.faceLandmarker.detectForVideo(this.videoElement, now);
+            const results = this.faceLandmarker.detectForVideo(this.videoElement, mpTimestamp);
             this.processFaceResults(results);
           } catch (err) {
             console.warn("[INTEGRITY] Face frame processing warning:", err);
@@ -541,13 +601,15 @@ export class IntegrityDetector {
         !this.videoElement.ended
       ) {
         try {
-          let now = Math.round(performance.now());
-          if (now <= this.lastObjectTimestamp) {
-            now = this.lastObjectTimestamp + 1;
+          const now = performance.now();
+          this.lastObjectInferenceTime = now;
+          let mpTimestamp = Math.round(now);
+          if (mpTimestamp <= this.lastObjectMediaPipeTimestamp) {
+            mpTimestamp = this.lastObjectMediaPipeTimestamp + 1;
           }
-          this.lastObjectTimestamp = now;
+          this.lastObjectMediaPipeTimestamp = mpTimestamp;
 
-          const results = this.objectDetector.detectForVideo(this.videoElement, now);
+          const results = this.objectDetector.detectForVideo(this.videoElement, mpTimestamp);
           this.processObjectResults(results);
         } catch (err) {
           console.warn("[INTEGRITY] Object frame processing warning:", err);
@@ -569,10 +631,13 @@ export class IntegrityDetector {
 
     // 1. Check No Face
     if (faceCount === 0) {
+      this.callbacks.onGuidanceNudge?.({
+        type: "no_face",
+        message: "Camera Check: Your face is not visible in the camera frame. Please ensure your camera is uncovered and unobstructed.",
+      });
       this.checkCondition("no_face", true, INTEGRITY_CONFIG.debounceMs.noFace, inGracePeriod);
       this.checkCondition("multiple_faces", false, 0, false);
       this.checkCondition("gaze_away", false, 0, false);
-
       this.currentMetrics = {
         ...createEmptyMetrics(),
         faceCount: 0,
@@ -595,6 +660,10 @@ export class IntegrityDetector {
 
     // 2. Check Multiple Faces
     if (faceCount > 1) {
+      this.callbacks.onGuidanceNudge?.({
+        type: "multiple_faces",
+        message: "Room Notice: Multiple individuals detected in your camera feed. Please ensure you are alone in your room.",
+      });
       this.checkCondition("multiple_faces", true, INTEGRITY_CONFIG.debounceMs.multipleFaces, false);
     } else {
       this.checkCondition("multiple_faces", false, 0, false);
@@ -620,11 +689,15 @@ export class IntegrityDetector {
     const isHeadAway = relYaw > INTEGRITY_CONFIG.thresholds.yawMaxDegrees || relPitch > INTEGRITY_CONFIG.thresholds.pitchMaxDegrees;
     const isEyeAway = gaze.gazeAway;
     const isGazeAway = isHeadAway || isEyeAway;
-
     // Suppress gaze away violation during 10s grace period or while AI speaks
     const suppressGaze = inGracePeriod || this.isAiSpeaking;
+    if (isGazeAway && !suppressGaze) {
+      this.callbacks.onGuidanceNudge?.({
+        type: "gaze_away",
+        message: "Attention Reminder: Please keep your eyes on the screen and stay engaged with your interviewer.",
+      });
+    }
     this.checkCondition("gaze_away", isGazeAway, INTEGRITY_CONFIG.debounceMs.gazeAway, suppressGaze);
-
     // Extract Facial Features & Blendshapes
     const blendMap: Record<string, number> = {};
     for (const b of blendshapes) {
@@ -704,28 +777,37 @@ export class IntegrityDetector {
   }
 
   /**
-   * Debouncing Condition Logic
+   * Debouncing Condition Logic with 150ms Grace Tolerance Window
    */
-  private checkCondition(
+  public checkCondition(
     type: IntegrityEventType,
     isDetected: boolean,
     requiredDurationMs: number,
     isSuppressed: boolean,
+    now: number = Date.now(),
   ) {
-    const now = Date.now();
-
-    if (!isDetected || isSuppressed) {
+    if (isSuppressed) {
       this.activeConditions.delete(type);
       return;
     }
 
-    if (!this.activeConditions.has(type)) {
-      this.activeConditions.set(type, now);
+    if (!isDetected) {
+      const tracker = this.activeConditions.get(type);
+      if (tracker && now - tracker.lastSeenTime > 150) {
+        this.activeConditions.delete(type);
+      }
       return;
     }
 
-    const firstSeenTime = this.activeConditions.get(type)!;
-    const durationMs = now - firstSeenTime;
+    let tracker = this.activeConditions.get(type);
+    if (!tracker) {
+      tracker = { firstSeenTime: now, lastSeenTime: now };
+      this.activeConditions.set(type, tracker);
+      return;
+    }
+
+    tracker.lastSeenTime = now;
+    const durationMs = now - tracker.firstSeenTime;
 
     if (durationMs >= requiredDurationMs) {
       const lastFired = this.firedCooldowns.get(type) || 0;
@@ -954,6 +1036,10 @@ export class IntegrityDetector {
    */
   private handleVisibilityChange = () => {
     if (document.hidden) {
+      this.callbacks.onGuidanceNudge?.({
+        type: "tab_switch",
+        message: "Browser Notice: Tab switch or window minimization detected. Please remain on your interview window.",
+      });
       this.callbacks.onViolation({
         type: "tab_switch",
         timestamp: Date.now(),
@@ -967,13 +1053,10 @@ export class IntegrityDetector {
 
   private handleFullscreenChange = () => {
     if (!document.fullscreenElement) {
-      this.callbacks.onViolation({
+      this.callbacks.onGuidanceNudge?.({
         type: "fullscreen_exit",
-        timestamp: Date.now(),
-        durationMs: 500,
-        confidence: 1.0,
+        message: "Fullscreen Notice: Fullscreen mode was minimized. Click below to restore fullscreen.",
         details: "User exited fullscreen mode",
-        strikeNumber: 0,
       });
     }
   };

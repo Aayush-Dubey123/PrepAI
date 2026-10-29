@@ -60,4 +60,8 @@ drizzle/
 # Markdown documentation files
 *.md
 **/*.md
+!README.md
+!AGENTS.md
+!agent.md
+!progress.md
 .env*

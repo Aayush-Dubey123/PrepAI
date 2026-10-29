@@ -32,8 +32,8 @@ export function CameraCalibrationCheck({
   calibrationFeedback,
 }: CameraCalibrationCheckProps) {
   return (
-    <div className="rounded-2xl border border-[#e2e8f0] bg-white p-4 space-y-3 shadow-xs">
-      <div className="flex items-center justify-between">
+    <div className="rounded-2xl border border-[#e2e8f0] bg-white p-3 sm:p-3.5 flex flex-col justify-between shadow-xs h-full gap-2.5">
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#eef2ff] border border-[#e0e7ff] flex items-center justify-center text-[#4f46e5]">
             <Camera className="w-4 h-4" />
@@ -47,7 +47,7 @@ export function CameraCalibrationCheck({
         <Badge variant={isCalibrated ? "success" : isCameraOn ? "purple" : "neutral"}>
           {isCalibrated ? (
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
               Calibrated
             </span>
           ) : isCameraOn ? (
@@ -58,9 +58,8 @@ export function CameraCalibrationCheck({
         </Badge>
       </div>
 
-      {/* Video Preview Frame */}
-      <div className="relative h-32 sm:h-36 w-full rounded-xl overflow-hidden bg-[#0d0e12] border border-white/10">
-        {/* Actual Video */}
+      {/* Video Preview Frame (Expanded Height) */}
+      <div className="relative flex-1 min-h-[220px] sm:min-h-[250px] md:min-h-[280px] w-full rounded-xl overflow-hidden bg-slate-900 border border-[#e2e8f0] shadow-inner flex items-center justify-center">
         <video
           ref={videoRef}
           autoPlay
@@ -80,15 +79,15 @@ export function CameraCalibrationCheck({
         {/* Centering Oval Guide */}
         {isCameraOn && (
           <div
-            className={`pointer-events-none absolute inset-0 flex items-center justify-center border-2 border-dashed rounded-full max-w-[160px] max-h-[190px] mx-auto my-auto transition-colors ${
+            className={`pointer-events-none absolute inset-0 flex items-center justify-center border-2 border-dashed rounded-full max-w-[170px] max-h-[210px] mx-auto my-auto transition-colors ${
               isCalibrated
-                ? "border-emerald-500/50 bg-emerald-500/[0.03]"
+                ? "border-emerald-500/70 bg-emerald-500/[0.05]"
                 : isCalibrating
-                ? "border-purple-500/80 bg-purple-500/[0.08] animate-pulse"
-                : "border-white/20 bg-white/[0.02]"
+                ? "border-indigo-600 bg-indigo-500/[0.08] animate-pulse"
+                : "border-indigo-400/70 bg-indigo-500/[0.04]"
             }`}
           >
-            <span className="text-[10px] text-white/50 font-mono tracking-wider">
+            <span className="text-[10px] text-white/80 font-mono tracking-wider font-semibold">
               {isCalibrated ? "ALIGNED" : "CENTER FACE HERE"}
             </span>
           </div>
@@ -96,7 +95,7 @@ export function CameraCalibrationCheck({
 
         {/* Fallback when camera is off - Centered */}
         {!isCameraOn && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center space-y-1.5 text-neutral-500 text-center pointer-events-none">
+          <div className="absolute inset-0 flex flex-col items-center justify-center space-y-1.5 text-slate-400 text-center pointer-events-none">
             <CameraOff className="w-8 h-8 stroke-[1.5]" />
             <span className="text-xs">Camera preview is inactive</span>
           </div>
@@ -107,25 +106,25 @@ export function CameraCalibrationCheck({
       {isCalibrating && (
         <div className="space-y-2 pt-1 animate-in fade-in">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-purple-400 font-medium flex items-center gap-1.5">
+            <span className="text-[#4f46e5] font-medium flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 animate-spin" />
               Registering baseline orientation (3s)...
             </span>
-            <span className="text-neutral-400 font-mono">{calibrationProgress}%</span>
+            <span className="text-[#64748b] font-mono">{calibrationProgress}%</span>
           </div>
           <ProgressBar value={calibrationProgress} variant="default" size="sm" />
         </div>
       )}
 
       {calibrationFeedback && !isCalibrating && (
-        <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
-          <ShieldAlert className="w-4 h-4 shrink-0" />
+        <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+          <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
           <span>{calibrationFeedback}</span>
         </div>
       )}
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 shrink-0">
         <Button
           variant={isCameraOn ? "secondary" : "outline"}
           size="sm"

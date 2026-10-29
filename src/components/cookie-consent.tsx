@@ -58,25 +58,25 @@ export function CookieConsent() {
 
   return (
     <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] animate-in fade-in slide-in-from-bottom-5 duration-300">
-      <div className="bg-[#141417]/95 border border-white/10 rounded-2xl p-5 shadow-2xl backdrop-blur-xl text-neutral-100 space-y-4">
+      <div className="bg-white/95 border border-[#e2e8f0] rounded-2xl p-5 shadow-2xl backdrop-blur-xl text-[#0f172a] space-y-4">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eef2ff] text-[#4f46e5] border border-[#c7d2fe] shrink-0">
               <Cookie size={18} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">
+              <h3 className="text-sm font-semibold text-[#0f172a]">
                 Cookie & Privacy Preferences
               </h3>
-              <p className="text-[11px] text-neutral-400 font-mono">
+              <p className="text-[11px] text-[#64748b] font-mono">
                 Session & Interview Data Protection
               </p>
             </div>
           </div>
           <button
             onClick={handleAcceptEssential}
-            className="text-neutral-500 hover:text-neutral-300 p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+            className="text-[#64748b] hover:text-[#0f172a] p-1 rounded-lg hover:bg-[#f1f5f9] transition-colors cursor-pointer"
             title="Dismiss & Accept Essential"
           >
             <X size={16} />
@@ -85,27 +85,27 @@ export function CookieConsent() {
 
         {/* Content Body */}
         {!showSettings ? (
-          <p className="text-xs text-neutral-300 leading-relaxed">
+          <p className="text-xs text-[#475569] leading-relaxed">
             We use cookies to safely store your technical interview progress, generate candidate reports, and ensure session persistence across browser refreshes and logins.
           </p>
         ) : (
-          <div className="space-y-3 border-t border-b border-white/[0.08] py-3 text-xs">
-            <div className="flex items-center justify-between">
+          <div className="space-y-2.5 border-t border-b border-[#e2e8f0] py-3 text-xs">
+            <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-[#e2e8f0] p-3">
               <div>
-                <div className="font-semibold text-white">Essential Cookies</div>
-                <div className="text-[11px] text-neutral-400">
+                <div className="font-semibold text-[#0f172a]">Essential Cookies</div>
+                <div className="text-[11px] text-[#64748b]">
                   Required for interview state & security
                 </div>
               </div>
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
                 Always Active
               </span>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-[#e2e8f0] p-3">
               <div>
-                <div className="font-semibold text-white">Session Persistence</div>
-                <div className="text-[11px] text-neutral-400">
+                <div className="font-semibold text-[#0f172a]">Session Persistence</div>
+                <div className="text-[11px] text-[#64748b]">
                   Restores ongoing interview reports across sessions
                 </div>
               </div>
@@ -118,14 +118,14 @@ export function CookieConsent() {
                     sessionTracking: e.target.checked,
                   }))
                 }
-                className="rounded border-white/20 bg-neutral-900 text-purple-600 focus:ring-purple-500/40"
+                className="h-4 w-4 rounded border-[#cbd5e1] text-[#4f46e5] focus:ring-[#6366f1] cursor-pointer"
               />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-xl bg-[#f8fafc] border border-[#e2e8f0] p-3">
               <div>
-                <div className="font-semibold text-white">Performance Analytics</div>
-                <div className="text-[11px] text-neutral-400">
+                <div className="font-semibold text-[#0f172a]">Performance Analytics</div>
+                <div className="text-[11px] text-[#64748b]">
                   Helps improve AI speech & response latency
                 </div>
               </div>
@@ -135,7 +135,7 @@ export function CookieConsent() {
                 onChange={(e) =>
                   setPreferences((p) => ({ ...p, analytics: e.target.checked }))
                 }
-                className="rounded border-white/20 bg-neutral-900 text-purple-600 focus:ring-purple-500/40"
+                className="h-4 w-4 rounded border-[#cbd5e1] text-[#4f46e5] focus:ring-[#6366f1] cursor-pointer"
               />
             </div>
           </div>
@@ -145,7 +145,7 @@ export function CookieConsent() {
         <div className="flex items-center justify-between gap-2 pt-1">
           <button
             onClick={() => setShowSettings((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-[#64748b] hover:text-[#0f172a] bg-[#f8fafc] border border-[#e2e8f0] hover:bg-[#f1f5f9] transition-all cursor-pointer"
           >
             <Settings size={13} />
             <span>{showSettings ? "Back" : "Preferences"}</span>
@@ -155,14 +155,14 @@ export function CookieConsent() {
             {!showSettings && (
               <button
                 onClick={handleAcceptEssential}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-all cursor-pointer"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#334155] hover:text-[#0f172a] bg-white border border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer"
               >
                 Essential Only
               </button>
             )}
             <button
               onClick={showSettings ? () => saveConsent(preferences) : handleAcceptAll}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 transition-all shadow-[0_0_15px_rgba(139,92,246,0.3)] cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-[#1e293b] hover:bg-[#0f172a] transition-all shadow-xs cursor-pointer"
             >
               <Check size={14} />
               <span>{showSettings ? "Save Preferences" : "Accept All"}</span>

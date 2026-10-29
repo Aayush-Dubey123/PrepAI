@@ -57,7 +57,7 @@ export default function InterviewLobbyPage() {
   const detectorRef = useRef<IntegrityDetector | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const lastAudioUpdateRef = useRef<number>(0);
-
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   // Validation on mount + prewarming
   useEffect(() => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -114,16 +114,21 @@ export default function InterviewLobbyPage() {
       if (microphoneRef.current) {
         microphoneRef.current.getTracks().forEach((track) => track.stop());
       }
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
       }
       if (detectorRef.current) {
         detectorRef.current.stop();
         detectorRef.current.close();
         detectorRef.current = null;
       }
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
     };
-  }, [interviewId, router, cameraStream]);
+  }, [interviewId, router]);
 
   // Video element attach
   useEffect(() => {
@@ -224,8 +229,8 @@ export default function InterviewLobbyPage() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      cameraStreamRef.current = stream;
       setCameraStream(stream);
-      setIsCameraOn(true);
       setCameraPermission("granted");
       setError(null);
     } catch (err) {
@@ -244,8 +249,8 @@ export default function InterviewLobbyPage() {
         detectorRef.current = null;
       }
       cameraStream.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
       setCameraStream(null);
-      setIsCameraOn(false);
     } else {
       await startCamera();
     }
@@ -328,60 +333,66 @@ export default function InterviewLobbyPage() {
   };
 
   return (
-    <main className="h-[calc(100dvh-3.5rem)] bg-[#f4f6fa] text-[#0f172a] p-3 sm:p-4 flex flex-col justify-between overflow-y-auto sm:overflow-hidden relative select-none">
-      <div className="relative z-10 max-w-5xl mx-auto w-full flex-1 flex flex-col justify-between gap-2.5">
+    <main className="h-[calc(100dvh-3.5rem)] bg-[#f4f6fa] text-[#0f172a] p-2.5 sm:p-3 md:p-4 flex flex-col justify-between overflow-y-auto relative select-none">
+      <div className="relative z-10 max-w-5xl xl:max-w-6xl mx-auto w-full flex-1 flex flex-col justify-between gap-2 sm:gap-2.5 min-h-0">
         {/* Header Ribbon */}
-        <div className="text-center sm:text-left space-y-0.5">
+        <div className="text-center sm:text-left space-y-0.5 shrink-0">
           <div className="inline-flex items-center gap-1.5 rounded-full border border-[#c7d2fe] bg-[#e0e7ff] px-2.5 py-0.5 text-[11px] font-mono text-[#4338ca]">
             <Sparkles className="w-3 h-3 text-[#4f46e5]" />
             <span>PRE-FLIGHT HARDWARE CALIBRATION</span>
           </div>
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#0f172a]">
+          <h1 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-[#0f172a]">
             Audio, Voice & Camera Calibration
           </h1>
-          <p className="text-xs text-[#64748b]">
+          <p className="text-[11px] sm:text-xs text-[#64748b]">
             Verify microphone responsiveness, audio playback, speech recognition, and face orientation before entering your live interview.
           </p>
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+          <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200 shrink-0">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* 4-Step Flight Check Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
-          <MicCheck
-            isMicOn={isMicOn}
-            audioLevel={audioLevel}
-            onToggleMic={toggleMic}
-            isGranted={micPermission === "granted"}
-          />
+        {/* Asymmetric 2-Column Hardware Verification Section */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 min-h-0 items-stretch">
+          {/* Left Column: 3 Audio & Voice Checks Stacked */}
+          <div className="md:col-span-5 lg:col-span-5 flex flex-col gap-2 sm:gap-2.5 justify-between min-h-0">
+            <MicCheck
+              isMicOn={isMicOn}
+              audioLevel={audioLevel}
+              onToggleMic={toggleMic}
+              isGranted={micPermission === "granted"}
+            />
 
-          <SpeakerCheck
-            onConfirmed={() => setSpeakerWorks(true)}
-            isConfirmed={speakerWorks}
-          />
+            <SpeakerCheck
+              onConfirmed={() => setSpeakerWorks(true)}
+              isConfirmed={speakerWorks}
+            />
 
-          <SpeechCheck
-            onSuccess={() => setSpeechRecognized(true)}
-            isPassed={speechRecognized}
-          />
+            <SpeechCheck
+              onSuccess={() => setSpeechRecognized(true)}
+              isPassed={speechRecognized}
+            />
+          </div>
 
-          <CameraCalibrationCheck
-            videoRef={videoRef}
-            canvasRef={canvasRef}
-            isCameraOn={isCameraOn}
-            cameraPermission={cameraPermission}
-            onToggleCamera={toggleCamera}
-            onRunCalibration={run3sCalibration}
-            isCalibrating={isCalibrating}
-            isCalibrated={isCalibrated}
-            calibrationProgress={calibrationProgress}
-            calibrationFeedback={calibrationFeedback}
-          />
+          {/* Right Column: Camera & Face Alignment Card (Spans Full Height) */}
+          <div className="md:col-span-7 lg:col-span-7 flex flex-col min-h-0">
+            <CameraCalibrationCheck
+              videoRef={videoRef}
+              canvasRef={canvasRef}
+              isCameraOn={isCameraOn}
+              cameraPermission={cameraPermission}
+              onToggleCamera={toggleCamera}
+              onRunCalibration={run3sCalibration}
+              isCalibrating={isCalibrating}
+              isCalibrated={isCalibrated}
+              calibrationProgress={calibrationProgress}
+              calibrationFeedback={calibrationFeedback}
+            />
+          </div>
         </div>
 
         {/* Readiness Bar & Stage Entry Action */}

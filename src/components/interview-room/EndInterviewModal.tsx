@@ -22,7 +22,7 @@ export function EndInterviewModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent onClose={onClose} className="max-w-md">
         <DialogHeader>
-          <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 mb-2">
             <PhoneOff className="w-5 h-5" />
           </div>
           <DialogTitle>End Interview Session?</DialogTitle>
@@ -31,8 +31,8 @@ export function EndInterviewModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/5 text-xs text-neutral-400">
-          <AlertCircle className="w-4 h-4 text-purple-400 shrink-0" />
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
           <span>You cannot re-open the interview session once finalized.</span>
         </div>
 

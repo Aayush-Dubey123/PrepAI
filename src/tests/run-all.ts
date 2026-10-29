@@ -13,7 +13,18 @@ const testSuites = [
   { name: "Answer Grounding & Follow-ups", file: "src/tests/answer-grounding.test.ts" },
   { name: "Rate Limit Assertions", file: "src/tests/rate-limit.test.ts" },
   { name: "Phase 1-6 Full Verification Harness", file: "src/tests/phase-verification.ts" },
+  { name: "Analytics & Admin Auth Barriers", file: "src/tests/analytics-auth.test.ts" },
+  { name: "Integrity Debounce & Cadence", file: "src/tests/integrity-debounce.test.ts" },
+  { name: "Interview Room UI & Smoke", file: "src/tests/interview-room-smoke.test.ts" },
+  { name: "Audio Conversation & Overlap", file: "src/tests/audio-conversation.test.ts" },
+  { name: "Interview Deletion & Retention", file: "src/tests/interview-deletion.test.ts" },
+  { name: "Security & Access Control", file: "src/tests/security.test.ts" },
 ];
+
+if (testSuites.length !== 11) {
+  console.error(`Expected exactly 11 test suites, found ${testSuites.length}`);
+  process.exit(1);
+}
 
 console.log("\n=======================================================");
 console.log("             PREPAI TEST SUITE RUNNER                 ");

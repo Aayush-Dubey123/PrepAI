@@ -69,7 +69,7 @@ export function TabsList({
     <div
       role="tablist"
       className={cn(
-        "inline-flex h-11 items-center justify-center rounded-xl bg-[#141417] p-1 text-neutral-400 border border-white/5",
+        "inline-flex h-10 items-center justify-center rounded-xl bg-[#f1f5f9] p-1 text-[#64748b] border border-[#e2e8f0]",
         className
       )}
       {...props}
@@ -102,10 +102,10 @@ export function TabsTrigger({
       disabled={disabled}
       onClick={() => onValueChange(value)}
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:pointer-events-none disabled:opacity-50",
         isSelected
-          ? "bg-[#27272a] text-white shadow-sm font-semibold"
-          : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]",
+          ? "bg-white text-[#0f172a] font-semibold shadow-xs"
+          : "text-[#64748b] hover:text-[#0f172a] hover:bg-slate-200/50",
         className
       )}
       {...props}

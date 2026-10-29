@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { lt } from "drizzle-orm";
+import { timingSafeEqual } from "crypto";
 import { db } from "@/src/db/index";
 import { auditEvents } from "@/src/db/schema";
+
+function safeCompare(provided: string, expected: string): boolean {
+  const bufA = Buffer.from(provided);
+  const bufB = Buffer.from(expected);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 export async function POST(req: NextRequest) {
   return handlePurge(req);
@@ -18,11 +26,9 @@ async function handlePurge(req: NextRequest) {
       return NextResponse.json({ error: "CRON_SECRET is not configured on the server" }, { status: 500 });
     }
 
-    const authHeader = req.headers.get("x-cron-secret") || req.headers.get("authorization");
-    const isAuthorized =
-      authHeader === cronSecret ||
-      authHeader === `Bearer ${cronSecret}`;
-
+    const rawHeader = req.headers.get("x-cron-secret") || req.headers.get("authorization") || "";
+    const cleanToken = rawHeader.startsWith("Bearer ") ? rawHeader.slice(7).trim() : rawHeader.trim();
+    const isAuthorized = safeCompare(cleanToken, cronSecret);
     if (!isAuthorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

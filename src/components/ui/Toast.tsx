@@ -39,24 +39,24 @@ export function Toast({ toast, onDismiss }: ToastProps) {
 
   const typeConfig = {
     info: {
-      icon: <Info className="w-4 h-4 text-blue-400 shrink-0" />,
-      border: "border-blue-500/30",
-      bg: "bg-[#141417]/90",
+      icon: <Info className="w-4 h-4 text-[#0284c7] shrink-0" />,
+      border: "border-blue-200",
+      bg: "bg-blue-50/70",
     },
     success: {
-      icon: <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />,
-      border: "border-emerald-500/30",
-      bg: "bg-[#141417]/90",
+      icon: <CheckCircle2 className="w-4 h-4 text-[#15803d] shrink-0" />,
+      border: "border-emerald-200",
+      bg: "bg-emerald-50/70",
     },
     warning: {
-      icon: <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />,
-      border: "border-amber-500/30",
-      bg: "bg-[#141417]/90",
+      icon: <AlertTriangle className="w-4 h-4 text-[#b45309] shrink-0" />,
+      border: "border-amber-200",
+      bg: "bg-amber-50/70",
     },
     error: {
-      icon: <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />,
-      border: "border-rose-500/30",
-      bg: "bg-[#141417]/90",
+      icon: <AlertCircle className="w-4 h-4 text-[#be123c] shrink-0" />,
+      border: "border-rose-200",
+      bg: "bg-rose-50/70",
     },
   };
 
@@ -67,7 +67,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
     <div
       role="status"
       className={cn(
-        "flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-auto max-w-sm w-full",
+        "flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-auto max-w-sm w-full bg-white/95 text-[#0f172a]",
         border,
         bg,
         isVisible
@@ -76,13 +76,13 @@ export function Toast({ toast, onDismiss }: ToastProps) {
       )}
     >
       {icon}
-      <p className="text-xs text-neutral-200 flex-1 leading-snug">{toast.message}</p>
+      <p className="text-xs text-[#0f172a] font-medium flex-1 leading-snug">{toast.message}</p>
       <button
         onClick={() => {
           setIsVisible(false);
           setTimeout(() => onDismiss(toast.id), 200);
         }}
-        className="text-neutral-500 hover:text-white p-1 rounded-md transition-colors"
+        className="text-[#64748b] hover:text-[#0f172a] p-1 rounded-md transition-colors cursor-pointer"
         aria-label="Dismiss notification"
       >
         <X className="w-3.5 h-3.5" />
