@@ -23,6 +23,8 @@ const requiresSsl =
     connectionString.includes("railway.app") ||
     connectionString.includes("aivencloud.com"));
 
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
 declare global {
   var __pgPool: Pool | undefined;
 }
@@ -32,12 +34,12 @@ const pool =
   new Pool({
     connectionString,
     ...(requiresSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-    max: process.env.NODE_ENV === "production" ? 10 : 5,
-    idleTimeoutMillis: 30000,
+    max: isServerless ? 1 : process.env.NODE_ENV === "production" ? 10 : 5,
+    idleTimeoutMillis: isServerless ? 2000 : 30000,
     connectionTimeoutMillis: 5000,
   });
+
 if (process.env.NODE_ENV !== "production") {
   globalThis.__pgPool = pool;
 }
-
 export const db = drizzle(pool, { schema });

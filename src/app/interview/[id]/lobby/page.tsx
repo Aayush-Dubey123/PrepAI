@@ -231,6 +231,7 @@ export default function InterviewLobbyPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       cameraStreamRef.current = stream;
       setCameraStream(stream);
+      setIsCameraOn(true);
       setCameraPermission("granted");
       setError(null);
     } catch (err) {
@@ -251,6 +252,7 @@ export default function InterviewLobbyPage() {
       cameraStream.getTracks().forEach((track) => track.stop());
       cameraStreamRef.current = null;
       setCameraStream(null);
+      setIsCameraOn(false);
     } else {
       await startCamera();
     }
