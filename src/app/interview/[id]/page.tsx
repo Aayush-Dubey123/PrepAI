@@ -100,7 +100,7 @@ export default function InterviewStagePage() {
       void orchestrator.submitAnswer(text);
     },
     onBargeIn: stopAiSpeech,
-    enabled: orchestrator.turnState === "user_turn",
+    enabled: orchestrator.turnState === "user_turn" || orchestrator.turnState === "ai_speaking",
   });
 
   // 5. Silence Nudge Controller (Invariant: 12-second inactivity hint, NEVER auto-submits)
@@ -128,6 +128,9 @@ export default function InterviewStagePage() {
     if (isListening) {
       stopListening();
     } else {
+      if (isAiSpeaking) {
+        stopAiSpeech();
+      }
       startListening();
     }
   };
@@ -138,10 +141,25 @@ export default function InterviewStagePage() {
   };
 
   const handleQuickPrompt = (promptText: string) => {
+    if (isListening) {
+      stopListening();
+    }
     stopAiSpeech();
     void orchestrator.submitAnswer(promptText);
   };
 
+  const handleFinishedAnswer = () => {
+    if (isListening) {
+      stopListening();
+    }
+    stopAiSpeech();
+    const candidateText = (interimTranscript || orchestrator.userInput || "").trim();
+    if (candidateText.length > 0) {
+      void orchestrator.submitAnswer(candidateText);
+    } else {
+      void orchestrator.submitAnswer("I have completed my answer. Let's move to the next part.");
+    }
+  };
   const handleConfirmEndInterview = async () => {
     setIsEndingSession(true);
     await orchestrator.endSession("manual");
@@ -217,11 +235,13 @@ export default function InterviewStagePage() {
             isListening={isListening}
             isCameraOn={isCameraOn}
             isAiSpeaking={isAiSpeaking}
+            isProcessing={orchestrator.turnState === "processing"}
             onToggleMic={handleToggleMic}
             onToggleCamera={handleToggleCamera}
             onToggleTranscript={() => setIsTranscriptOpen((prev) => !prev)}
             isTranscriptOpen={isTranscriptOpen}
             onQuickPrompt={handleQuickPrompt}
+            onFinishedAnswer={handleFinishedAnswer}
             onEndCall={() => setShowEndModal(true)}
             supportsSpeechRecognition={supportsSpeechRecognition}
           />

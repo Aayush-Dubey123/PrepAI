@@ -273,8 +273,9 @@ export function useTurnOrchestrator({
   const submitAnswer = useCallback(
     async (text?: string) => {
       const finalText = (text || userInput).trim();
-      if (!finalText || turnState !== "user_turn") return;
+      if (!finalText || (turnState !== "user_turn" && turnState !== "ai_speaking")) return;
 
+      onStopAiSpeech?.();
       sendClientLatencyLog("candidate_speech_end");
       setUserInput("");
       setTranscriptError(null);
@@ -293,7 +294,7 @@ export function useTurnOrchestrator({
         setTurnState("user_turn");
       }
     },
-    [userInput, turnState, sendClientLatencyLog, appendTranscript, transcript, callTurn]
+    [userInput, turnState, onStopAiSpeech, sendClientLatencyLog, appendTranscript, transcript, callTurn]
   );
 
   // Load session on mount

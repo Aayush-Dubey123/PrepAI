@@ -8,11 +8,13 @@ export interface InterviewControlsProps {
   isListening: boolean;
   isCameraOn: boolean;
   isAiSpeaking: boolean;
+  isProcessing?: boolean;
   onToggleMic: () => void;
   onToggleCamera: () => void;
   onToggleTranscript: () => void;
   isTranscriptOpen: boolean;
   onQuickPrompt: (promptText: string) => void;
+  onFinishedAnswer?: () => void;
   onEndCall: () => void;
   supportsSpeechRecognition: boolean;
 }
@@ -21,11 +23,13 @@ export function InterviewControls({
   isListening,
   isCameraOn,
   isAiSpeaking,
+  isProcessing = false,
   onToggleMic,
   onToggleCamera,
   onToggleTranscript,
   isTranscriptOpen,
   onQuickPrompt,
+  onFinishedAnswer,
   onEndCall,
   supportsSpeechRecognition,
 }: InterviewControlsProps) {
@@ -35,8 +39,9 @@ export function InterviewControls({
       <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         <button
           type="button"
+          disabled={isProcessing}
           onClick={() => onQuickPrompt("Could you please repeat or rephrase the question?")}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white border border-[#e2e8f0] text-[#475569] hover:text-[#0f172a] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer shadow-2xs"
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white border border-[#e2e8f0] text-[#475569] hover:text-[#0f172a] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RotateCcw className="w-3 h-3 text-[#4f46e5]" />
           <span>Repeat Question</span>
@@ -44,8 +49,9 @@ export function InterviewControls({
 
         <button
           type="button"
+          disabled={isProcessing}
           onClick={() => onQuickPrompt("Could you provide a hint or narrow the scope of what you are looking for?")}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white border border-[#e2e8f0] text-[#475569] hover:text-[#0f172a] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer shadow-2xs"
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white border border-[#e2e8f0] text-[#475569] hover:text-[#0f172a] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <HelpCircle className="w-3 h-3 text-amber-500" />
           <span>Need a Hint</span>
@@ -53,8 +59,9 @@ export function InterviewControls({
 
         <button
           type="button"
-          onClick={() => onQuickPrompt("I have completed my answer. Let's move to the next part.")}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white border border-[#e2e8f0] text-[#475569] hover:text-[#0f172a] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer shadow-2xs"
+          disabled={isProcessing}
+          onClick={onFinishedAnswer || (() => onQuickPrompt("I have completed my answer. Let's move to the next part."))}
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-white border border-[#e2e8f0] text-[#475569] hover:text-[#0f172a] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Check className="w-3 h-3 text-emerald-600" />
           <span>Finished Answer</span>
@@ -68,8 +75,9 @@ export function InterviewControls({
           <Button
             variant={isListening ? "glow" : "secondary"}
             size="md"
+            disabled={isProcessing}
             onClick={onToggleMic}
-            className={`h-11 px-4 gap-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`h-11 px-4 gap-2 rounded-xl text-xs sm:text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
               isListening ? "bg-[#4f46e5] text-white shadow-md shadow-indigo-500/20" : ""
             }`}
           >
