@@ -30,13 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env
-.env.local
-.env.production
-# Keep .env.example for GitHub
+# env files
+.env*
 !.env.example
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -64,4 +60,7 @@ drizzle/
 !AGENTS.md
 !agent.md
 !progress.md
-.env*
+
+# Evaluation data (contains local transcripts, candidate PII, and benchmark logs)
+/eval-data/*
+!eval-data/.gitkeep
