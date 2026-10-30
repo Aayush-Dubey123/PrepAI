@@ -373,7 +373,7 @@ function QuestionPlayer() {
     const isPassing = score >= 70;
 
     return (
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-5 sm:space-y-6">
+      <div className="h-full w-full max-w-5xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between overflow-hidden">
         <div className="flex items-center justify-between">
           <Link
             href={`/practice/${drillSlug}`}
@@ -385,7 +385,7 @@ function QuestionPlayer() {
         </div>
 
         {/* Score Hero Card */}
-        <Card className="p-5 sm:p-6 bg-white border-[#e2e8f0] shadow-xs flex flex-col sm:flex-row items-center justify-between gap-6">
+        <Card className="shrink-0 p-4 sm:p-5 bg-white border-[#e2e8f0] shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 mb-3">
           <div className="flex items-center gap-6">
             {/* Circular Gauge */}
             <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
@@ -446,10 +446,11 @@ function QuestionPlayer() {
         </Card>
 
         {/* Breakdown Accordion Table */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Per-Question Breakdown</h3>
-
-          <div className="space-y-2">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <h3 className="shrink-0 text-xs font-bold text-[#0f172a] uppercase tracking-wider mb-2 font-mono">
+            Per-Question Breakdown
+          </h3>
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
             {finishData.perQuestion.map((item, idx) => {
               const isExpanded = !!expandedQuestions[idx];
               return (
@@ -520,9 +521,9 @@ function QuestionPlayer() {
   const progressPercent = Math.round(((currentIdx + 1) / total) * 100);
 
   return (
-    <div className="p-4 sm:p-5 max-w-4xl mx-auto space-y-3.5">
+    <div className="h-full w-full max-w-5xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between overflow-hidden">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between pb-3 border-b border-[#e2e8f0]">
+      <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-[#e2e8f0]">
         <div className="flex items-center gap-3">
           <Link
             href={`/practice/${drillSlug}`}
@@ -557,7 +558,7 @@ function QuestionPlayer() {
       </div>
 
       {/* Progress Track */}
-      <div className="space-y-1.5">
+      <div className="shrink-0 space-y-1 my-1.5">
         <div className="flex items-center justify-between text-[11px] font-semibold text-[#64748b]">
           <span>
             Question {currentIdx + 1} of {total}
@@ -567,8 +568,9 @@ function QuestionPlayer() {
         <ProgressBar value={progressPercent} size="sm" />
       </div>
 
-      {/* Question Card */}
-      <Card className="p-4 sm:p-5 bg-white border-[#e2e8f0] shadow-xs space-y-3.5">
+      {/* Active Question Scroll Container */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 my-1">
+        <Card className="p-4 sm:p-5 bg-white border-[#e2e8f0] shadow-xs space-y-3.5">
         {/* Stem Header */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -627,7 +629,6 @@ function QuestionPlayer() {
           )}
         </div>
       </Card>
-
       {/* Slide-in Feedback Panel (Practice Mode) */}
       {viewState === "feedback" && feedbackData && (
         <Card className="p-6 bg-slate-900 border-slate-800 text-white shadow-lg space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -723,7 +724,7 @@ function QuestionPlayer() {
           </div>
         </Card>
       )}
-
+      </div>
       {/* Report Modal */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">

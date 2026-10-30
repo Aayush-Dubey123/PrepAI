@@ -47,7 +47,6 @@ export function Header() {
     pathname.startsWith("/practice") ||
     pathname.startsWith("/gym")
   ) {
-    // Return null to prevent duplicate headers on live stage, admin, dashboard, analytics, and practice routes
     return null;
   }
 

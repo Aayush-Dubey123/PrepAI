@@ -20,8 +20,11 @@ import {
   Volume2,
   ShieldCheck,
   Award,
+  Sliders,
+  BarChart3,
+  TrendingUp,
+  Target,
 } from "lucide-react";
-
 export interface DrillDetailProps {
   drill: {
     id: string;
@@ -72,8 +75,13 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
       startSession(undefined, true);
     }
   }, [initialAutoReview]);
+  const completed = history.filter((h) => h.score !== null);
+  const completedCount = completed.length;
+  const bestScore = completed.length > 0 ? Math.max(...completed.map((h) => h.score || 0)) : null;
+  const avgScore = completed.length > 0 ? Math.round(completed.reduce((acc, h) => acc + (h.score || 0), 0) / completed.length) : null;
 
   const setsForLevel = practiceSets.filter((s) => s.level === level);
+
   const startSession = async (practiceSetId?: string, isSmartSet: boolean = false) => {
     try {
       if (isSmartSet) setLoadingSmart(true);
@@ -111,224 +119,300 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
   };
 
   return (
-    <div className="p-4 sm:p-5 lg:px-6 lg:py-4 max-w-6xl mx-auto space-y-4">
-      {/* Back button & Breadcrumb */}
-      <div className="flex items-center gap-3">
-        <Link
-          href="/practice"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#64748b] hover:text-[#0f172a] transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Drills</span>
-        </Link>
+    <div className="h-full w-full max-w-7xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between overflow-hidden">
+      {/* Top Drill Hero Banner — Compact, high-density, single-line alignment */}
+      <div className={`shrink-0 rounded-2xl p-3.5 sm:p-4 bg-gradient-to-r ${drill.color} border border-inherit/40 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3`}>
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/practice"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#64748b] hover:text-[#0f172a] bg-white/90 hover:bg-white border border-[#e2e8f0] px-2 py-0.5 rounded-lg transition-colors shadow-2xs shrink-0"
+            >
+              <ArrowLeft className="w-3 h-3" />
+              <span>Back to Drills</span>
+            </Link>
+            <Badge variant="neutral" className="bg-white/90 font-semibold text-[10px] shrink-0">
+              {drill.category}
+            </Badge>
+            <span className="text-[10.5px] font-medium text-[#64748b] flex items-center gap-1 shrink-0">
+              <Clock className="w-3 h-3" />
+              {Math.round(drill.timeLimitSeconds / 60)}m Session Limit
+            </span>
+          </div>
+
+          <h1 className="text-lg sm:text-xl font-bold text-[#0f172a] tracking-tight truncate">
+            {drill.title}
+          </h1>
+
+          <p className="text-[11px] text-[#475569] leading-tight line-clamp-1 max-w-3xl">
+            {drill.description}
+          </p>
+        </div>
+
+        {/* Adaptive Weak-Concept Drill Action CTA */}
+        <div className="shrink-0 flex items-center gap-2">
+          <Button
+            onClick={() => startSession(undefined, true)}
+            disabled={loadingSmart || loadingSetId !== null}
+            variant="primary"
+            className="px-4 py-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-xl shadow-xs flex items-center gap-2 text-xs font-semibold cursor-pointer disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>{loadingSmart ? "Preparing..." : "Adaptive Weak-Concept Drill"}</span>
+          </Button>
+        </div>
       </div>
 
-      {/* Drill Hero Banner */}
-      <div className={`rounded-2xl p-4 sm:p-4.5 bg-gradient-to-r ${drill.color} border border-inherit/40 shadow-xs`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1.5">
+      {/* Two-Column Equal-Height Balanced Cockpit Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0 items-stretch my-2.5 overflow-hidden">
+        {/* Left Column: SESSION CONFIGURATION & CURATED SETS */}
+        <div className="h-full flex flex-col min-h-0 overflow-hidden bg-white rounded-2xl border border-[#e2e8f0] p-4 sm:p-4.5 shadow-2xs">
+          {/* Column Header */}
+          <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-[#f1f5f9] mb-2.5">
             <div className="flex items-center gap-2">
-              <Badge variant="neutral" className="bg-white/80 font-semibold text-[10px]">
-                {drill.category}
-              </Badge>
-              <span className="text-[10.5px] font-medium text-[#64748b] flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {Math.round(drill.timeLimitSeconds / 60)}m Session Limit
+              <Sliders className="w-4 h-4 text-indigo-600" />
+              <h2 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider font-mono">
+                CONFIGURATION & PRACTICE SETS
+              </h2>
+            </div>
+            <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+              {setsForLevel.length} set{setsForLevel.length === 1 ? "" : "s"} available
+            </span>
+          </div>
+
+          {/* Unified Compact Controls Group */}
+          <div className="shrink-0 space-y-2.5 p-3 bg-[#f8fafc] rounded-xl border border-[#e2e8f0] mb-2.5">
+            {/* Difficulty Tier */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-[#475569] uppercase font-mono tracking-wider">
+                  Difficulty Tier
+                </span>
+                <span className="text-[10px] text-[#94a3b8] capitalize">
+                  Active: <strong className="text-indigo-600">{level}</strong>
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1 p-1 bg-white rounded-xl border border-[#e2e8f0]">
+                {(["foundational", "mid", "senior", "staff"] as const).map((lvl) => (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setLevel(lvl)}
+                    className={`py-1.5 text-xs font-semibold rounded-lg capitalize transition-all cursor-pointer ${
+                      level === lvl
+                        ? "bg-indigo-600 text-white shadow-xs"
+                        : "text-[#64748b] hover:text-[#0f172a] hover:bg-slate-50"
+                    }`}
+                  >
+                    {lvl}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Practice Mode */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-[#475569] uppercase font-mono tracking-wider">
+                  Practice Mode
+                </span>
+                <span className="text-[10px] text-[#94a3b8] capitalize">
+                  Mode: <strong className="text-indigo-600">{mode}</strong>
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMode("practice")}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    mode === "practice"
+                      ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
+                      : "bg-white border-[#e2e8f0] text-[#64748b] hover:bg-slate-50"
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Practice</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode("timed")}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    mode === "timed"
+                      ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
+                      : "bg-white border-[#e2e8f0] text-[#64748b] hover:bg-slate-50"
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Timed</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode("voice")}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    mode === "voice"
+                      ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
+                      : "bg-white border-[#e2e8f0] text-[#64748b] hover:bg-slate-50"
+                  }`}
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>Voice</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Curated Sets List (Fills remaining height) */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between pb-1.5 mb-1">
+              <span className="text-[10.5px] font-bold text-[#0f172a] uppercase font-mono tracking-wider">
+                Curated Sets — {level.toUpperCase()} Tier
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a] tracking-tight">{drill.title}</h1>
-            <p className="text-[11px] text-[#475569] max-w-2xl leading-relaxed">{drill.description}</p>
-          </div>
 
-          {/* Quick Smart Set Action */}
-          <div className="shrink-0">
-            <Button
-              onClick={() => startSession(undefined, true)}
-              disabled={loadingSmart || loadingSetId !== null}
-              variant="primary"
-              className="px-4 py-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-xl shadow-xs flex items-center gap-2 text-xs font-semibold cursor-pointer disabled:opacity-50"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>{loadingSmart ? "Preparing..." : "Adaptive Weak-Concept Drill"}</span>
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Controls: Mode & Difficulty */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-white p-3.5 rounded-xl border border-[#e2e8f0] shadow-2xs">
-        {/* Mode Selector */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Practice Mode</label>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => setMode("practice")}
-              className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all ${
-                mode === "practice"
-                  ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
-                  : "bg-[#f8fafc] border-[#e2e8f0] text-[#64748b] hover:bg-slate-100"
-              }`}
-            >
-              <Zap className="w-4 h-4 mb-1" />
-              <span className="text-xs font-bold">Practice</span>
-              <span className="text-[10px] text-[#94a3b8]">Instant Feedback</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMode("timed")}
-              className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all ${
-                mode === "timed"
-                  ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
-                  : "bg-[#f8fafc] border-[#e2e8f0] text-[#64748b] hover:bg-slate-100"
-              }`}
-            >
-              <Clock className="w-4 h-4 mb-1" />
-              <span className="text-xs font-bold">Timed</span>
-              <span className="text-[10px] text-[#94a3b8]">{Math.round(drill.timeLimitSeconds / 60)}m countdown</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMode("voice")}
-              className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all ${
-                mode === "voice"
-                  ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs"
-                  : "bg-[#f8fafc] border-[#e2e8f0] text-[#64748b] hover:bg-slate-100"
-              }`}
-            >
-              <Volume2 className="w-4 h-4 mb-1" />
-              <span className="text-xs font-bold">Voice</span>
-              <span className="text-[10px] text-[#94a3b8]">Speech Recognition</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Level Tabs */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Difficulty Tier</label>
-          <div className="grid grid-cols-4 gap-1 p-1 bg-[#f1f5f9] rounded-xl border border-[#e2e8f0]">
-            {(["foundational", "mid", "senior", "staff"] as const).map((lvl) => (
-              <button
-                key={lvl}
-                type="button"
-                onClick={() => setLevel(lvl)}
-                className={`py-2 text-xs font-semibold rounded-lg capitalize transition-all ${
-                  level === lvl
-                    ? "bg-white text-[#0f172a] shadow-xs"
-                    : "text-[#64748b] hover:text-[#0f172a]"
-                }`}
-              >
-                {lvl}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Curated Practice Sets */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">
-            Curated Sets — {level[0].toUpperCase() + level.slice(1)} Tier
-          </h2>
-          <span className="text-[11px] text-[#64748b]">{setsForLevel.length} set(s) available</span>
-        </div>
-
-        {setsForLevel.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-2xl border border-dashed border-[#cbd5e1] text-[#94a3b8] text-xs">
-            No published practice sets available for this level yet. Try the Adaptive Weak-Concept Drill above!
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {setsForLevel.map((set) => (
-              <Card key={set.id} className="p-3.5 flex items-center justify-between gap-4 border-[#e2e8f0] hover:border-indigo-300 transition-all">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#0f172a]">{set.title}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] text-[#64748b]">
-                    <span>{set.questionCount} Questions</span>
-                    <span>•</span>
-                    <span className="capitalize">{level} Level</span>
-                  </div>
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+              {setsForLevel.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1] text-[#94a3b8] text-xs">
+                  <Sparkles className="w-6 h-6 text-indigo-400 mb-2" />
+                  <p className="font-semibold text-[#475569]">No curated sets published for this tier yet.</p>
+                  <p className="text-[11px] text-[#94a3b8] mt-1 max-w-xs">
+                    Try the Adaptive Weak-Concept Drill above to practice algorithmically selected questions.
+                  </p>
                 </div>
+              ) : (
+                setsForLevel.map((set) => (
+                  <div
+                    key={set.id}
+                    className="p-3 rounded-xl border border-[#e2e8f0] bg-white hover:border-indigo-300 hover:shadow-xs transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="space-y-0.5 min-w-0">
+                      <h3 className="text-xs font-bold text-[#0f172a] truncate">{set.title}</h3>
+                      <div className="flex items-center gap-2 text-[10.5px] text-[#64748b]">
+                        <span className="font-medium">{set.questionCount} Questions</span>
+                        <span>•</span>
+                        <span className="capitalize">{level} Level</span>
+                      </div>
+                    </div>
 
-                <Button
-                  onClick={() => startSession(set.id, false)}
-                  disabled={loadingSetId !== null || loadingSmart}
-                  variant="primary"
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>{loadingSetId === set.id ? "Loading..." : "Start Set"}</span>
-                </Button>
-              </Card>
-            ))}
+                    <Button
+                      onClick={() => startSession(set.id, false)}
+                      disabled={loadingSetId !== null || loadingSmart}
+                      variant="primary"
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>{loadingSetId === set.id ? "Loading..." : "Start Set"}</span>
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Recent History Table */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Session History</h2>
-        {history.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-2xl border border-[#e2e8f0] text-[#94a3b8] text-xs">
-            No completed sessions yet for this drill. Complete your first set above to start tracking mastery!
+        {/* Right Column: DRILL MASTERY & SESSION HISTORY */}
+        <div className="h-full flex flex-col min-h-0 overflow-hidden bg-white rounded-2xl border border-[#e2e8f0] p-4 sm:p-4.5 shadow-2xs">
+          {/* Column Header */}
+          <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-[#f1f5f9] mb-2.5">
+            <div className="flex items-center gap-2">
+              <Award className="w-4 h-4 text-purple-600" />
+              <h2 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider font-mono">
+                PERFORMANCE & RECENT SESSIONS
+              </h2>
+            </div>
+            <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-100">
+              {completedCount} completed
+            </span>
           </div>
-        ) : (
-          <div className="overflow-hidden bg-white rounded-2xl border border-[#e2e8f0] shadow-2xs">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#f8fafc] text-[#64748b] border-b border-[#e2e8f0]">
-                <tr>
-                  <th className="py-2.5 px-3.5 font-semibold">Date</th>
-                  <th className="py-2.5 px-3.5 font-semibold">Set / Target</th>
-                  <th className="py-2.5 px-3.5 font-semibold">Tier</th>
-                  <th className="py-2.5 px-3.5 font-semibold">Mode</th>
-                  <th className="py-2.5 px-3.5 font-semibold">Duration</th>
-                  <th className="py-2.5 px-3.5 font-semibold text-right">Score</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f1f5f9] text-[#334155]">
-                {history.map((h) => (
-                  <tr key={h.id} className="hover:bg-[#fafbfc] transition-colors">
-                    <td className="py-2.5 px-3.5 text-[#64748b]">
-                      {h.startedAt ? new Date(h.startedAt).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="py-2.5 px-3.5 font-medium text-[#0f172a]">{h.practiceSetTitle}</td>
-                    <td className="py-2.5 px-3.5 capitalize">{h.level}</td>
-                    <td className="py-2.5 px-3.5 capitalize">
-                      <span className="bg-[#f1f5f9] text-[#475569] px-2 py-0.5 rounded text-[10px] font-semibold">
-                        {h.mode}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3.5 text-[#64748b]">
-                      {h.durationSeconds ? `${Math.round(h.durationSeconds / 60)}m ${h.durationSeconds % 60}s` : "—"}
-                    </td>
-                    <td className="py-2.5 px-3.5 text-right">
-                      {h.score !== null ? (
-                        <span
-                          className={`font-bold px-2.5 py-1 rounded-full text-[11px] ${
-                            h.score >= 80
-                              ? "bg-emerald-100 text-emerald-800"
-                              : h.score >= 60
-                              ? "bg-indigo-100 text-indigo-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          {h.score}%
-                        </span>
-                      ) : (
-                        <span className="text-[#94a3b8] italic">Incomplete</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          {/* 3 Metrics Cards */}
+          <div className="shrink-0 grid grid-cols-3 gap-2 mb-2.5">
+            <div className="p-2 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] text-center">
+              <span className="text-[9.5px] font-semibold text-[#64748b] uppercase tracking-wider block">Sessions</span>
+              <span className="text-base font-black text-[#0f172a]">{completedCount}</span>
+            </div>
+            <div className="p-2 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] text-center">
+              <span className="text-[9.5px] font-semibold text-[#64748b] uppercase tracking-wider block">Best Score</span>
+              <span className="text-base font-black text-emerald-600">{bestScore !== null ? `${bestScore}%` : "—"}</span>
+            </div>
+            <div className="p-2 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] text-center">
+              <span className="text-[9.5px] font-semibold text-[#64748b] uppercase tracking-wider block">Average</span>
+              <span className="text-base font-black text-indigo-600">{avgScore !== null ? `${avgScore}%` : "—"}</span>
+            </div>
           </div>
-        )}
+
+          {/* Session History (Fills remaining height) */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between pb-1.5 mb-1">
+              <span className="text-[10.5px] font-bold text-[#0f172a] uppercase font-mono tracking-wider">
+                Recorded Sessions
+              </span>
+              <span className="text-[10px] text-[#94a3b8]">Newest first</span>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              {history.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1] text-[#94a3b8] text-xs">
+                  <CheckCircle2 className="w-6 h-6 text-purple-400 mb-2" />
+                  <p className="font-semibold text-[#475569]">No completed sessions yet.</p>
+                  <p className="text-[11px] text-[#94a3b8] mt-1 max-w-xs">
+                    Complete your first drill set on the left to calibrate concept mastery.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-[#e2e8f0]">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#f8fafc] text-[#64748b] border-b border-[#e2e8f0] text-[10px]">
+                      <tr>
+                        <th className="py-2 px-3 font-semibold">Date</th>
+                        <th className="py-2 px-3 font-semibold">Set / Target</th>
+                        <th className="py-2 px-3 font-semibold">Tier</th>
+                        <th className="py-2 px-3 font-semibold">Mode</th>
+                        <th className="py-2 px-3 font-semibold text-right">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f1f5f9] text-[#334155] text-[10.5px]">
+                      {history.map((h) => (
+                        <tr key={h.id} className="hover:bg-[#fafbfc] transition-colors">
+                          <td className="py-2 px-3 text-[#64748b] whitespace-nowrap">
+                            {h.startedAt ? new Date(h.startedAt).toLocaleDateString() : "—"}
+                          </td>
+                          <td className="py-2 px-3 font-medium text-[#0f172a] truncate max-w-[140px]">
+                            {h.practiceSetTitle}
+                          </td>
+                          <td className="py-2 px-3 capitalize text-[10px]">{h.level}</td>
+                          <td className="py-2 px-3">
+                            <span className="bg-[#f1f5f9] text-[#475569] px-1.5 py-0.5 rounded text-[9px] font-semibold capitalize">
+                              {h.mode}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {h.score !== null ? (
+                              <span
+                                className={`font-bold px-2 py-0.5 rounded-full text-[9.5px] ${
+                                  h.score >= 80
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : h.score >= 60
+                                    ? "bg-indigo-100 text-indigo-800"
+                                    : "bg-amber-100 text-amber-800"
+                                }`}
+                              >
+                                {h.score}%
+                              </span>
+                            ) : (
+                              <span className="text-[#94a3b8] italic text-[10px]">Incomplete</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
