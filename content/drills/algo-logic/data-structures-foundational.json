@@ -1,0 +1,81 @@
+[
+  {
+    "slug": "algo-logic-data-structures-foundational-01",
+    "type": "mcq",
+    "level": "foundational",
+    "payload": {
+      "type": "mcq",
+      "stem": "Which computational complexity best characterizes an optimal implementation of Data Structures at foundational level?",
+      "options": [
+        {
+          "key": "A",
+          "text": "O(N log N) using a balanced heap or divide-and-conquer"
+        },
+        {
+          "key": "B",
+          "text": "O(N^2) quadratic nested loops"
+        },
+        {
+          "key": "C",
+          "text": "O(2^N) exponential recursion"
+        },
+        {
+          "key": "D",
+          "text": "O(N!) factorial brute-force"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Complexity Precision",
+          "weight": 0.7,
+          "description": "Correctly identifies O(N log N) asymptotic bound."
+        },
+        {
+          "name": "Algorithmic Justification",
+          "weight": 0.3,
+          "description": "Understands tree depth or recurrence relation."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct: optimal implementations partition the problem space logarithmically, yielding O(N log N) runtime.",
+    "explanation": "In Data Structures, divide-and-conquer structures prune search space effectively, avoiding quadratic time traps.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "algo-logic-data-structures-foundational-02",
+    "type": "fix_the_bug",
+    "level": "foundational",
+    "payload": {
+      "type": "fix_the_bug",
+      "stem": "Fix the subtle boundary or pointer defect in this algorithmic logic for Data Structures:",
+      "buggy_code": "function processItems(items) {\n  let total = 0;\n  for (let i = 0; i <= items.length; i++) {\n    if (items[i]) total += items[i];\n  }\n  return total;\n}",
+      "correct_code": "function processItems(items) {\n  let total = 0;\n  for (let i = 0; i < items.length; i++) {\n    if (items[i]) total += items[i];\n  }\n  return total;\n}",
+      "language": "javascript",
+      "hint": "Check loop terminal condition: <= items.length reads past the end of the array."
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Index Boundary Fix",
+          "weight": 0.7,
+          "description": "Corrects <= to < to avoid accessing undefined."
+        },
+        {
+          "name": "Logic Preservation",
+          "weight": 0.3,
+          "description": "Retains accumulator logic intact."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "The loop condition `i <= items.length` causes an off-by-one bug reading undefined at `items[items.length]`. Change to `i < items.length`.",
+    "explanation": "Arrays in JavaScript are zero-indexed with elements from 0 to length - 1. Accessing index length produces undefined.",
+    "review_status": "draft",
+    "version": 1
+  }
+]

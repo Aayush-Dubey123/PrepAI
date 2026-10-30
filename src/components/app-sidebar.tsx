@@ -15,11 +15,13 @@ import {
   CheckCircle2,
   RotateCcw,
   X,
+  Flame,
 } from "lucide-react";
 import { UserButton, useUser } from "@clerk/nextjs";
 import { Button } from "@/src/components/ui/Button";
 import { Badge } from "@/src/components/ui/Badge";
 import { useToast } from "@/src/components/ui/ToastProvider";
+import { isTechnicalPracticeEnabled } from "@/src/lib/config";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -121,17 +123,37 @@ export function AppSidebar() {
               <span>Dashboard</span>
             </Link>
 
+            {isTechnicalPracticeEnabled() && (
+              <Link
+                href="/practice"
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                  pathname.startsWith("/practice") || pathname.startsWith("/gym")
+                    ? "bg-[#e0e7ff] text-[#3730a3] font-semibold shadow-xs"
+                    : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#f8fafc]"
+                }`}
+              >
+                <Flame
+                  className={`w-4 h-4 ${
+                    pathname.startsWith("/practice") || pathname.startsWith("/gym")
+                      ? "text-[#4f46e5]"
+                      : "text-[#64748b]"
+                  }`}
+                />
+                <span>Technical Practice</span>
+              </Link>
+            )}
+
             <Link
               href="/analytics"
               className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                pathname === "/analytics"
+                pathname.startsWith("/analytics")
                   ? "bg-[#e0e7ff] text-[#3730a3] font-semibold shadow-xs"
                   : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#f8fafc]"
               }`}
             >
               <BarChart3
                 className={`w-4 h-4 ${
-                  pathname === "/analytics" ? "text-[#4f46e5]" : "text-[#64748b]"
+                  pathname.startsWith("/analytics") ? "text-[#4f46e5]" : "text-[#64748b]"
                 }`}
               />
               <span>Analytics Console</span>

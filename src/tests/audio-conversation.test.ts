@@ -1,3 +1,5 @@
+export {};
+
 /**
  * Audio Conversation & Turn Orchestration Test Suite
  *
@@ -154,7 +156,7 @@ async function main() {
   // Test 4: Immediate barge-in on interim candidate speech
   console.log("▶ Test 4: Interim speech recognition triggers immediate barge-in callback");
   {
-    let bargeInFired = false;
+    let bargeInFired: boolean = false;
     const onBargeIn = () => {
       bargeInFired = true;
     };
@@ -176,7 +178,7 @@ async function main() {
       results: [{ isFinal: false, 0: { transcript: "Actually regarding that..." } }],
     });
 
-    assert(bargeInFired === true, "Barge-in must fire on the very first interim word detected");
+    assert(Boolean(bargeInFired) === true, "Barge-in must fire on the very first interim word detected");
     console.log("  ✅ Interim speech triggered instant barge-in without waiting for isFinal");
     passedCount++;
   }

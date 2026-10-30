@@ -42,3 +42,16 @@ export function getRequiredEnv(name: string): string {
   if (!val) throw new Error(`Environment variable ${name} is not configured`);
   return val;
 }
+
+export function isTechnicalPracticeEnabled(): boolean {
+  // 1. Authoritative new flag takes absolute precedence if defined
+  if (process.env.NEXT_PUBLIC_PRACTICE_ENABLED !== undefined) {
+    return process.env.NEXT_PUBLIC_PRACTICE_ENABLED !== "false";
+  }
+  // 2. Legacy flag checked only when new flag is undefined
+  if (process.env.NEXT_PUBLIC_GYM_ENABLED !== undefined) {
+    return process.env.NEXT_PUBLIC_GYM_ENABLED !== "false";
+  }
+  // 3. Default: enabled
+  return true;
+}

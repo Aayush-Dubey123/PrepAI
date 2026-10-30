@@ -1,0 +1,61 @@
+[
+  {
+    "slug": "system-design-redis-caching-senior-01",
+    "type": "scenario",
+    "level": "senior",
+    "payload": {
+      "type": "scenario",
+      "stem": "Architect a scalable distributed subsystem optimizing Redis & Caching for a global enterprise platform at senior difficulty.",
+      "context": "The service receives 80,000 requests per second. Highlight data flow, storage partitioning, and replication failover strategies.",
+      "max_words": 350
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Partitioning & Throughput",
+          "weight": 0.6,
+          "description": "Detailed architectural breakdown of horizontal scaling and sharding."
+        },
+        {
+          "name": "Availability & Failover",
+          "weight": 0.4,
+          "description": "Concrete fault-tolerance and failover mechanisms."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "The design partitions traffic with consistent hashing rings, replicates asynchronously across availability zones, and enforces circuit breaking on slow upstream dependencies.",
+    "explanation": "Under senior conditions, scaling Redis & Caching requires decoupling synchronous database reads and utilizing bounded asynchronous event queues.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "system-design-redis-caching-senior-02",
+    "type": "short_answer",
+    "level": "senior",
+    "payload": {
+      "type": "short_answer",
+      "stem": "What are the primary operational bottlenecks when monitoring and tuning Redis & Caching in production environments?",
+      "max_words": 250
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Bottleneck Identification",
+          "weight": 0.5,
+          "description": "Pinpoints concrete failure triggers (I/O, locks, CPU, network)."
+        },
+        {
+          "name": "Mitigation Strategy",
+          "weight": 0.5,
+          "description": "Recommends actionable production remediation."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "The primary bottleneck is disk I/O saturation and thread pool exhaustion during burst traffic. Mitigation relies on request coalescing and adaptive rate limiting.",
+    "explanation": "When requests surge, unbuffered downstream queries saturate connection pools, creating cascading latency across the entire microservice ecosystem.",
+    "review_status": "draft",
+    "version": 1
+  }
+]

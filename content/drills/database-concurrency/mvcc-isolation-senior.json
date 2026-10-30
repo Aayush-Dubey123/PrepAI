@@ -1,0 +1,78 @@
+[
+  {
+    "slug": "database-concurrency-mvcc-isolation-senior-01",
+    "type": "mcq",
+    "level": "senior",
+    "payload": {
+      "type": "mcq",
+      "stem": "How do relational database engines guarantee data integrity during MVCC & Transaction Isolation under concurrent transactions?",
+      "options": [
+        {
+          "key": "A",
+          "text": "Enforcing row-level locking or multi-version concurrency control (MVCC) snapshots"
+        },
+        {
+          "key": "B",
+          "text": "Discarding subsequent writes without notification"
+        },
+        {
+          "key": "C",
+          "text": "Flushing all tables to unencrypted text files"
+        },
+        {
+          "key": "D",
+          "text": "Executing all transactions in serial queue order globally"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Concurrency Protocol",
+          "weight": 0.7,
+          "description": "Correctly identifies MVCC or row locks."
+        },
+        {
+          "name": "ACID Guarantees",
+          "weight": 0.3,
+          "description": "Understands isolation invariants."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct: relational engines use MVCC snapshots and selective row locks to provide ACID transaction guarantees.",
+    "explanation": "MVCC allows readers to read consistent snapshots without blocking writers, while writers lock individual rows to prevent dirty writes.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "database-concurrency-mvcc-isolation-senior-02",
+    "type": "short_answer",
+    "level": "senior",
+    "payload": {
+      "type": "short_answer",
+      "stem": "Explain how deadlocks arise in database systems during MVCC & Transaction Isolation and how applications should structure queries to avoid them.",
+      "max_words": 250
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Deadlock Cycle Theory",
+          "weight": 0.5,
+          "description": "Identifies circular wait graphs between conflicting locks."
+        },
+        {
+          "name": "Deterministic Ordering",
+          "weight": 0.5,
+          "description": "Recommends consistent global lock acquisition order."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Deadlocks occur when two transactions each hold a lock the other requires, forming a circular wait graph. Applications prevent deadlocks by acquiring locks in consistent monotonic order (e.g. sorted by ID).",
+    "explanation": "By enforcing a strict global ordering for multi-row operations, cyclic lock dependencies become impossible to form.",
+    "review_status": "draft",
+    "version": 1
+  }
+]

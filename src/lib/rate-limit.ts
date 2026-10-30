@@ -44,8 +44,9 @@ const stores: Record<string, Map<string, WindowEntry>> = {
   tts_req: new Map(),
   parse_resume: new Map(),
   llm: new Map(),
+  drill_session_create: new Map(),
+  drill_answer: new Map(),
 };
-
 // ─── Idempotency store ────────────────────────────────────────────────────────
 
 /** Stores seen requestIds (client dedup). Max TTL = 10 minutes. */
@@ -155,6 +156,21 @@ export function checkParseResumeLimit(userId: string): RateLimitResult {
  */
 export function checkLlmRouteLimit(userId: string): RateLimitResult {
   return check(stores.llm, `llm:${userId}`, 5, 60 * 1000);
+}
+/**
+ * POST /api/drills/[slug]/sessions
+ * 10 per hour per user.
+ */
+export function checkDrillSessionCreate(userId: string): RateLimitResult {
+  return check(stores.drill_session_create, `dsc:${userId}`, 10, 60 * 60 * 1000);
+}
+
+/**
+ * POST /api/drill-sessions/[id]/answer
+ * 60 per minute per user.
+ */
+export function checkDrillAnswer(userId: string): RateLimitResult {
+  return check(stores.drill_answer, `da:${userId}`, 60, 60 * 1000);
 }
 
 /**

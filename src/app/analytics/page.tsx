@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/src/components/app-sidebar";
 import { UserButton } from "@clerk/nextjs";
+import { Badge } from "@/src/components/ui/Badge";
+import { useToast } from "@/src/components/ui/ToastProvider";
 import {
   TrendingUp,
   Award,
@@ -51,101 +53,59 @@ import type {
   EvaluatedQuestionFeedback,
   TopBlindspot,
 } from "@/src/lib/analytics/user";
-import { DUMMY_RESUME_ID } from "@/src/lib/default-interview-plan";
-
 type TabKey = "feedback" | "practice-sets" | "curriculum";
 
-interface PracticeSetPreset {
-  id: string;
+interface RoadmapStage {
+  stage: number;
   title: string;
-  category: string;
-  duration: string;
-  difficulty: "Foundational" | "Mid-Level" | "Senior" | "Staff";
+  slug: string;
+  level: "foundational" | "mid" | "senior" | "staff";
   description: string;
-  focusTopics: string[];
-  roleTitle: string;
-  icon: "system-design" | "algo" | "behavioral" | "frontend" | "database" | "rapid";
-  color: string;
+  topics: string[];
+  duration: string;
+  icon: "cpu" | "terminal" | "database" | "layers";
 }
 
-const PRACTICE_SETS: PracticeSetPreset[] = [
+const ROADMAP_STAGES: RoadmapStage[] = [
   {
-    id: "system-design",
-    title: "System Design & Distributed Scalability",
-    category: "Architecture",
-    duration: "15 mins",
-    difficulty: "Staff",
-    description:
-      "Deep architectural probe on microservices, caching topologies, eventual consistency, and high-throughput event processing.",
-    focusTopics: ["Distributed Systems", "PostgreSQL", "Redis", "Partitioning", "CAP Theorem"],
-    roleTitle: "System Design & Architecture Specialist",
-    icon: "system-design",
-    color: "from-blue-500/10 to-indigo-500/10 border-indigo-200 text-indigo-700",
-  },
-  {
-    id: "algo-logic",
-    title: "Algorithmic Logic & Edge-Case Blitz",
-    category: "Coding & Logic",
-    duration: "10 mins",
-    difficulty: "Senior",
-    description:
-      "Targeted technical interrogation testing time/space complexity analysis, memory boundaries, and tricky edge-case invariants.",
-    focusTopics: ["Algorithms", "Data Structures", "Space-Time Tradeoffs", "Boundary Conditions"],
-    roleTitle: "Algorithmic Systems Engineer",
-    icon: "algo",
-    color: "from-purple-500/10 to-pink-500/10 border-purple-200 text-purple-700",
-  },
-  {
-    id: "behavioral-star",
-    title: "Behavioral & Executive STAR Simulator",
-    category: "Leadership",
-    duration: "10 mins",
-    difficulty: "Mid-Level",
-    description:
-      "Structured behavioral evaluation assessing conflict resolution, cross-functional ownership, engineering ethics, and delivery under pressure.",
-    focusTopics: ["STAR Framework", "Cross-Functional Influence", "Conflict Resolution", "Ownership"],
-    roleTitle: "Engineering Lead & Behavioral Candidate",
-    icon: "behavioral",
-    color: "from-amber-500/10 to-orange-500/10 border-amber-200 text-amber-700",
-  },
-  {
-    id: "frontend-arch",
-    title: "Frontend Architecture & Web Systems",
-    category: "Web & UI",
-    duration: "15 mins",
-    difficulty: "Senior",
-    description:
-      "Rigorous probe into component composition, re-render lifecycles, CSS containment, state machines, and Core Web Vitals.",
-    focusTopics: ["React 19", "State Management", "DOM Reconciliation", "Web Performance"],
-    roleTitle: "Senior Frontend Architect",
-    icon: "frontend",
-    color: "from-cyan-500/10 to-blue-500/10 border-cyan-200 text-cyan-700",
-  },
-  {
-    id: "database-concurrency",
-    title: "Database Internals & Concurrency Deep-Dive",
-    category: "Persistence",
-    duration: "15 mins",
-    difficulty: "Staff",
-    description:
-      "Focuses on transaction isolation (ACID, MVCC), index internals (B-Tree vs Hash), deadlocks, and connection pooling.",
-    focusTopics: ["PostgreSQL", "MVCC Isolation", "B-Trees", "Deadlock Mitigation", "WAL"],
-    roleTitle: "Database & Storage Systems Specialist",
-    icon: "database",
-    color: "from-emerald-500/10 to-teal-500/10 border-emerald-200 text-emerald-700",
-  },
-  {
-    id: "rapid-screen",
-    title: "Rapid-Fire Technical Screening (5-Min Blitz)",
-    category: "Speed Drills",
+    stage: 1,
+    title: "Foundational Technical Triage",
+    slug: "rapid-screen",
+    level: "foundational",
+    description: "Core computer science, networking protocols, HTTP status codes, and baseline API triage.",
+    topics: ["Networking", "APIs", "Operating Systems", "Data Structures"],
     duration: "5 mins",
-    difficulty: "Foundational",
-    description:
-      "Fast-paced foundational triage covering HTTP/3, memory management, REST vs gRPC, and fundamental terminology.",
-    focusTopics: ["Computer Science Fundamentals", "Networking", "APIs", "Concurrency"],
-    roleTitle: "Fullstack Technical Screening",
-    icon: "rapid",
-    color: "from-rose-500/10 to-amber-500/10 border-rose-200 text-rose-700",
+    icon: "cpu",
+  },
+  {
+    stage: 2,
+    title: "Algorithmic Logic & Invariants",
+    slug: "algo-logic",
+    level: "mid",
+    description: "Space-time complexity analysis, boundary conditions, state transitions, and tricky edge-case invariants.",
+    topics: ["Complexity", "Pointers", "Recursion", "Invariants"],
+    duration: "10 mins",
+    icon: "terminal",
+  },
+  {
+    stage: 3,
+    title: "Systems & Storage Internals",
+    slug: "database-concurrency",
+    level: "senior",
+    description: "Multi-version concurrency control (MVCC), isolation levels, lock contention, and connection topologies.",
+    topics: ["PostgreSQL", "MVCC", "Deadlocks", "ACID Guarantees"],
+    duration: "15 mins",
+    icon: "database",
+  },
+  {
+    stage: 4,
+    title: "Enterprise Distributed Scalability",
+    slug: "system-design",
+    level: "staff",
+    description: "Distributed consensus, eventual consistency, CAP theorem tradeoffs, and high-throughput event processing.",
+    topics: ["CAP Theorem", "Kafka / Event Mesh", "Partitioning", "Cache Topologies"],
+    duration: "15 mins",
+    icon: "layers",
   },
 ];
 
@@ -157,7 +117,15 @@ export default function CandidateAnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("feedback");
   const [mounted, setMounted] = useState(false);
-  const [launchingDrillId, setLaunchingDrillId] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [resolvedPracticeSet, setResolvedPracticeSet] = useState<{
+    id: string;
+    title: string;
+    drillSlug: string;
+    level: string;
+  } | null>(null);
+  const [resolvingSet, setResolvingSet] = useState(false);
+  const [launchingSession, setLaunchingSession] = useState(false);
   const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
 
   useEffect(() => {
@@ -202,44 +170,107 @@ export default function CandidateAnalyticsPage() {
     fetchAnalytics(false);
   }, []);
 
-  // Handle immediate 1-click launch of targeted practice set
-  const handleLaunchPracticeSet = async (preset: PracticeSetPreset) => {
+  const resolveRecommendedSet = useCallback(async (drillSlug: string, targetLevel: string) => {
     try {
-      setLaunchingDrillId(preset.id);
-      const response = await fetch("/api/interviews/initialize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobRole: preset.roleTitle,
-          resumeId: DUMMY_RESUME_ID,
-          customCandidateProfile: {
-            fullName: "Targeted Drill Candidate",
-            topSkills: preset.focusTopics,
-            yearsOfExperience: 4,
-            coreProjects: [
-              {
-                title: `${preset.title} Practice Run`,
-                techStack: preset.focusTopics,
-                bulletPoints: [preset.description],
-              },
-            ],
-          },
-        }),
-      });
+      setResolvingSet(true);
+      const res = await fetch(`/api/drills/${drillSlug}/sets`);
+      if (!res.ok) return;
+      const json = await res.json();
+      const setsByLevel = json.setsByLevel;
+      if (!setsByLevel) return;
 
-      const resJson = await response.json();
-      if (!response.ok) {
-        throw new Error(resJson.error || "Failed to initialize practice set");
+      const levelSets = setsByLevel[targetLevel] || [];
+      const match = levelSets[0] || Object.values(setsByLevel).flat()[0];
+      if (match) {
+        setResolvedPracticeSet({
+          id: (match as { id: string }).id,
+          title: (match as { title: string }).title,
+          drillSlug,
+          level: targetLevel,
+        });
+      }
+    } catch {
+      // Graceful fallback
+    } finally {
+      setResolvingSet(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    const targetSlug = data.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+    const targetLevel = (data.summary?.totalInterviews ?? 0) > 0 ? "senior" : "foundational";
+    resolveRecommendedSet(targetSlug, targetLevel);
+  }, [data, resolveRecommendedSet]);
+
+  const handleLaunchRecommendedSet = async () => {
+    if (!data) return;
+    setLaunchingSession(true);
+    const targetSlug = resolvedPracticeSet?.drillSlug || data.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+    const targetLevel = resolvedPracticeSet?.level || ((data.summary?.totalInterviews ?? 0) > 0 ? "senior" : "foundational");
+
+    try {
+      const payload: Record<string, unknown> = {
+        level: targetLevel,
+        mode: "practice",
+      };
+
+      if (resolvedPracticeSet?.id) {
+        payload.practiceSetId = resolvedPracticeSet.id;
+        payload.isSmartSet = false;
+      } else {
+        payload.isSmartSet = true;
       }
 
-      router.push(`/interview/${resJson.id}/lobby`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to launch drill session";
-      alert(`Could not launch drill: ${msg}`);
-      setLaunchingDrillId(null);
+      const res = await fetch(`/api/drills/${targetSlug}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const resJson = await res.json();
+      if (!res.ok) {
+        throw new Error(resJson.error || "Failed to start recommended set");
+      }
+
+      router.push(`/practice/${targetSlug}/play?sessionId=${resJson.id}`);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Failed to launch session", { type: "error" });
+      setLaunchingSession(false);
     }
   };
 
+  const handleLaunchDirectDrill = async (
+    drillSlug: string,
+    level: string = "senior",
+    targetConceptId?: string,
+  ) => {
+    try {
+      setLaunchingSession(true);
+      const res = await fetch(`/api/drills/${drillSlug}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          level,
+          mode: "practice",
+          isSmartSet: true,
+          targetConceptId,
+        }),
+      });
+      const resJson = await res.json();
+      if (!res.ok) {
+        throw new Error(resJson.error || "Failed to launch drill session");
+      }
+      router.push(`/practice/${drillSlug}/play?sessionId=${resJson.id}`);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Failed to launch drill", { type: "error" });
+      setLaunchingSession(false);
+    }
+  };
+
+  const handleLaunchReviewSession = async () => {
+    await handleLaunchDirectDrill("system-design", "senior");
+  };
   const summary = data?.summary;
   const avgScore = summary?.averageScore ?? null;
   const topBlindspot = data?.topBlindspots?.[0];
@@ -275,21 +306,21 @@ export default function CandidateAnalyticsPage() {
       <AppSidebar />
 
       {/* 2. Main Viewport */}
-      <main className="flex-1 min-w-0 h-screen overflow-y-auto p-4 sm:p-6 space-y-6">
+      <main className="flex-1 min-w-0 h-screen overflow-y-auto p-4 sm:p-5 space-y-4">
         {/* Top Header Bar */}
-        <div className="shrink-0 flex flex-col md:flex-row md:items-center justify-between border-b border-[#e2e8f0] pb-4 gap-4">
+        <div className="shrink-0 flex flex-col md:flex-row md:items-center justify-between border-b border-[#e2e8f0] pb-2.5 gap-2.5">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#0f172a]">
-                Feedback Diagnostic & Practice Gym
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#0f172a]">
+                Feedback Diagnostic & Technical Practice
               </h1>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#fdf4ff] text-[#a21caf] border border-[#f5d0fe]">
-                <Sparkles className="w-3.5 h-3.5 text-[#c026d3]" />
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf4ff] text-[#a21caf] border border-[#f5d0fe]">
+                <Sparkles className="w-3 h-3 text-[#c026d3]" />
                 Targeted AI Training Lab
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-[#64748b] mt-1">
-              Deep evaluation feedback analysis, blindspot triage, and modular technical practice drills
+            <p className="text-xs text-[#64748b] mt-0.5 truncate">
+              Deep evaluation feedback analysis, blindspot triage, and modular technical practice roadmaps
             </p>
           </div>
 
@@ -457,7 +488,7 @@ export default function CandidateAnalyticsPage() {
                   <div className="flex items-center gap-2 text-[#4f46e5]">
                     <Sparkles className="w-4 h-4" />
                     <h3 className="text-sm font-bold text-[#0f172a]">
-                      Welcome to your Diagnostic Feedback & Practice Gym!
+                      Welcome to Technical Practice & Diagnostic Feedback!
                     </h3>
                   </div>
                   <p className="text-xs text-[#64748b] max-w-xl leading-relaxed">
@@ -469,7 +500,7 @@ export default function CandidateAnalyticsPage() {
                   onClick={() => setActiveTab("practice-sets")}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#4f46e5] text-white text-xs font-semibold hover:bg-[#4338ca] transition-all shadow-xs shrink-0 cursor-pointer"
                 >
-                  <span>Explore Practice Sets</span>
+                  <span>Explore Diagnostic Practice</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -501,7 +532,7 @@ export default function CandidateAnalyticsPage() {
                   }`}
                 >
                   <Flame className="w-4 h-4 text-orange-500" />
-                  <span>Modular Practice Sets (6 Drills)</span>
+                  <span>Personalized Roadmap & Practice</span>
                 </button>
 
                 <button
@@ -801,97 +832,510 @@ export default function CandidateAnalyticsPage() {
               </div>
             )}
 
-            {/* TAB 2: Modular Practice Sets (All Practice Set Types) */}
+            {/* TAB 2: Diagnostic Practice & Learning Roadmap */}
             {activeTab === "practice-sets" && (
               <div className="space-y-6">
-                <div className="p-5 rounded-2xl bg-white border border-[#e2e8f0] shadow-xs space-y-2">
-                  <div className="flex items-center gap-2 text-[#4f46e5]">
-                    <Flame className="w-5 h-5 text-orange-500" />
-                    <h3 className="text-sm font-bold text-[#0f172a]">
-                      Targeted Modular Practice Gym
-                    </h3>
-                  </div>
-                  <p className="text-xs text-[#64748b] leading-relaxed">
-                    Skip full resume upload flows and jump straight into specialized drills designed to isolate and eliminate technical weak spots. Each drill calibrates depth dynamically in real-time.
-                  </p>
-                </div>
+                {/* 1. Precise 3-State User Experience */}
+                {(() => {
+                  const hasInterviews = (summary?.totalInterviews ?? 0) > 0;
+                  const hasPractice =
+                    (data.gym?.drillStats?.some((d) => d.attempts > 0) ?? false) ||
+                    ((data.gym?.streak ?? 0) > 0);
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {PRACTICE_SETS.map((preset) => {
-                    const isLaunching = launchingDrillId === preset.id;
-
+                  // STATE 1: Pure Onboarding
+                  if (!hasInterviews && !hasPractice) {
                     return (
-                      <div
-                        key={preset.id}
-                        className="rounded-2xl bg-white border border-[#e2e8f0] shadow-xs hover:shadow-md transition-all flex flex-col justify-between p-5 space-y-4"
-                      >
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-[#e0e7ff] text-[#4338ca] border border-[#c7d2fe]">
-                              {preset.category}
-                            </span>
-                            <div className="flex items-center gap-1.5 text-[11px] text-[#64748b]">
-                              <Clock className="w-3.5 h-3.5 text-[#94a3b8]" />
-                              <span>{preset.duration}</span>
+                      <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-50/90 via-white to-purple-50/70 border border-indigo-100 shadow-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-[#4f46e5]">
+                              <Sparkles className="w-5 h-5 text-[#4f46e5]" />
+                              <h3 className="text-sm font-bold text-[#0f172a]">
+                                Welcome to Technical Practice
+                              </h3>
                             </div>
+                            <p className="text-xs text-[#64748b] max-w-2xl leading-relaxed">
+                              Technical Practice delivers rapid, rubric-backed modular calibration across 6 core engineering domains.
+                              Unlike full interviews that require resume context, practice sets run standalone in 5–15 minutes with instant feedback.
+                            </p>
+                          </div>
+                          <Badge variant="purple" className="self-start sm:self-auto text-xs font-semibold px-3 py-1">
+                            Diagnostic Calibration
+                          </Badge>
+                        </div>
+
+                        {/* Initial Diagnostic Recommendation Card */}
+                        <div className="p-4 rounded-xl bg-white border border-[#e2e8f0] shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                Recommended Calibration
+                              </span>
+                              <span className="text-xs text-[#64748b]">5-Minute Foundational Assessment</span>
+                            </div>
+                            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                              Zero Prerequisites
+                            </span>
                           </div>
 
                           <div>
-                            <h4 className="text-sm font-bold text-[#0f172a] leading-snug">
-                              {preset.title}
+                            <h4 className="text-sm font-bold text-[#0f172a]">
+                              {resolvedPracticeSet?.title || "Rapid-Fire Technical Screening Set"}
                             </h4>
-                            <p className="text-xs text-[#64748b] mt-1.5 leading-relaxed">
-                              {preset.description}
+                            <p className="text-xs text-[#475569] mt-1 leading-relaxed">
+                              Benchmark core computer science, networking protocols, HTTP status codes, and baseline API triage.
+                              Completing this drill calibrates your initial readiness score and unlocks targeted difficulty suggestions.
                             </p>
                           </div>
 
-                          <div className="space-y-1.5 pt-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
-                              Focus Concepts
+                          <div className="pt-2 border-t border-[#f1f5f9] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <span className="text-[11px] text-[#64748b]">
+                              Level: <strong className="text-[#0f172a] capitalize">{resolvedPracticeSet?.level || "Foundational"}</strong> • Mode: Practice
                             </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {preset.focusTopics.map((topic, tIdx) => (
-                                <span
-                                  key={tIdx}
-                                  className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-[#f1f5f9] text-[#475569] border border-[#e2e8f0]"
-                                >
-                                  {topic}
-                                </span>
-                              ))}
-                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleLaunchRecommendedSet}
+                              disabled={resolvingSet || launchingSession}
+                              className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-[#4f46e5] text-white text-xs font-semibold hover:bg-[#4338ca] active:scale-95 disabled:opacity-60 transition-all shadow-xs cursor-pointer"
+                            >
+                              {launchingSession || resolvingSet ? (
+                                <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                              )}
+                              <span>
+                                {resolvingSet
+                                  ? "Resolving Recommended Set..."
+                                  : launchingSession
+                                  ? "Launching Interactive Session..."
+                                  : `Start Recommended Set: ${resolvedPracticeSet?.title || "Rapid-Fire Screening"}`}
+                              </span>
+                            </button>
                           </div>
-                        </div>
-
-                        <div className="pt-3 border-t border-[#f1f5f9] flex items-center justify-between">
-                          <span className="text-[10px] font-semibold text-[#64748b]">
-                            Level: <strong className="text-[#0f172a]">{preset.difficulty}</strong>
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => handleLaunchPracticeSet(preset)}
-                            disabled={isLaunching || launchingDrillId !== null}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#4f46e5] text-white text-xs font-semibold hover:bg-[#4338ca] active:scale-95 transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                          >
-                            {isLaunching ? (
-                              <>
-                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                <span>Pre-warming...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Play className="w-3 h-3 fill-current" />
-                                <span>Launch Drill</span>
-                              </>
-                            )}
-                          </button>
                         </div>
                       </div>
                     );
-                  })}
-                </div>
-              </div>
-            )}
+                  }
+
+                  // STATE 2: Active Practice Candidate (Practice sessions, but 0 full mock interviews)
+                  if (!hasInterviews && hasPractice) {
+                    const totalAttempts = data.gym?.drillStats?.reduce((acc, d) => acc + d.attempts, 0) ?? 0;
+                    return (
+                      <div className="p-6 rounded-2xl bg-gradient-to-br from-orange-50/80 via-white to-indigo-50/60 border border-orange-200 shadow-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-[#4f46e5]">
+                              <Flame className="w-5 h-5 text-orange-500 fill-orange-500" />
+                              <h3 className="text-sm font-bold text-[#0f172a]">
+                                Practice Momentum Active
+                              </h3>
+                            </div>
+                            <p className="text-xs text-[#64748b] max-w-2xl leading-relaxed">
+                              Great work establishing consistency! You have completed {totalAttempts} practice drill session{totalAttempts === 1 ? "" : "s"} across technical disciplines.
+                              To unlock automated blindspot diagnostic triage and hiring signal calibration, run a full mock interview in Dashboard.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-orange-100/70 border border-orange-300 rounded-full text-orange-900 text-xs font-bold">
+                              <Flame className="w-4 h-4 text-orange-600 fill-orange-500" />
+                              <span>{data.gym?.streak ?? 0} Day Streak</span>
+                            </div>
+                            <Link
+                              href="/dashboard"
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-[#e2e8f0] text-xs font-semibold text-[#0f172a] hover:bg-slate-50 transition-all shadow-xs"
+                            >
+                              <span>Run Full Interview</span>
+                              <ArrowRight className="w-3.5 h-3.5 text-[#4f46e5]" />
+                            </Link>
+                          </div>
+                        </div>
+
+                        {/* Next Level Recommendation */}
+                        <div className="p-4 rounded-xl bg-white border border-[#e2e8f0] shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                              Next Recommended Progression
+                            </span>
+                            <span className="text-xs text-[#64748b]">Level: Senior</span>
+                          </div>
+
+                          <div>
+                            <h4 className="text-sm font-bold text-[#0f172a]">
+                              {resolvedPracticeSet?.title || "Algorithmic Invariants & Distributed Systems"}
+                            </h4>
+                            <p className="text-xs text-[#475569] mt-1 leading-relaxed">
+                              Progress from foundational triage to advanced edge-case invariants and distributed concurrency.
+                            </p>
+                          </div>
+
+                          <div className="pt-2 border-t border-[#f1f5f9] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <span className="text-[11px] text-[#64748b]">Direct interactive launch with rubric feedback</span>
+                            <button
+                              type="button"
+                              onClick={handleLaunchRecommendedSet}
+                              disabled={resolvingSet || launchingSession}
+                              className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-[#4f46e5] text-white text-xs font-semibold hover:bg-[#4338ca] active:scale-95 disabled:opacity-60 transition-all shadow-xs cursor-pointer"
+                            >
+                              {launchingSession || resolvingSet ? (
+                                <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                              )}
+                              <span>
+                                {resolvingSet
+                                  ? "Resolving..."
+                                  : launchingSession
+                                  ? "Launching..."
+                                  : `Start Recommended Set: ${resolvedPracticeSet?.title || "Next Practice Set"}`}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // STATE 3: Calibrated Assessment (Has completed mock interviews)
+                  return (
+                    <div className="space-y-6">
+                      {/* Diagnostic Hero Card */}
+                      <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/60 border border-indigo-200 shadow-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-[#4f46e5]">
+                              <Target className="w-5 h-5 text-[#4f46e5]" />
+                              <h3 className="text-sm font-bold text-[#0f172a]">
+                                Personalized Learning Diagnostic & Targeted Remediation
+                              </h3>
+                            </div>
+                            <p className="text-xs text-[#64748b] max-w-2xl leading-relaxed">
+                              Calibrated from your latest evaluation feedback and identified blindspots. Launching the recommended set directly opens an interactive session targeting verified gaps.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-start sm:self-auto px-3.5 py-1.5 bg-orange-50 border border-orange-200 rounded-full text-orange-800 text-xs font-bold shadow-2xs">
+                            <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
+                            <span>{data.gym?.streak ?? 0} Day Streak</span>
+                          </div>
+                        </div>
+
+                        {/* Targeted Recommendation Box with Guaranteed Pre-Resolved Set */}
+                        <div className="p-5 rounded-xl bg-white border border-[#e2e8f0] shadow-2xs space-y-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="purple" className="text-[10px] uppercase font-bold">
+                                Priority Remediation Set
+                              </Badge>
+                              {topBlindspot && (
+                                <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                  {topBlindspot.area} ({topBlindspot.severity})
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-[#64748b]">
+                              Level: <strong className="text-[#0f172a] capitalize">{resolvedPracticeSet?.level || "Senior"}</strong>
+                            </span>
+                          </div>
+
+                          <div>
+                            <h4 className="text-sm font-bold text-[#0f172a]">
+                              {resolvedPracticeSet?.title || (topBlindspot ? `Targeted Remediation: ${topBlindspot.area}` : "Adaptive Technical Practice Set")}
+                            </h4>
+                            <p className="text-xs text-[#475569] mt-1 leading-relaxed">
+                              {topBlindspot?.suggestedAction ||
+                                "Targeted practice session calibrated to address identified blindspots from your recent technical mock evaluations."}
+                            </p>
+                          </div>
+
+                          <div className="pt-2 border-t border-[#f1f5f9] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <span className="text-[11px] text-[#64748b]">
+                              Zero dead clicks: launches interactive session directly into question player.
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={handleLaunchRecommendedSet}
+                              disabled={resolvingSet || launchingSession}
+                              className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-[#4f46e5] text-white text-xs font-semibold hover:bg-[#4338ca] active:scale-95 disabled:opacity-60 transition-all shadow-xs cursor-pointer"
+                            >
+                              {launchingSession || resolvingSet ? (
+                                <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                              )}
+                              <span>
+                                {resolvingSet
+                                  ? "Resolving Set..."
+                                  : launchingSession
+                                  ? "Launching Interactive Session..."
+                                  : `Start Recommended Set: ${resolvedPracticeSet?.title || "Targeted Drill"}`}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Verified Weak Areas & Blindspot Remediation Cards */}
+                      {data.topBlindspots && data.topBlindspots.length > 0 && (
+                        <div className="p-5 rounded-2xl bg-white border border-[#e2e8f0] shadow-xs space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">
+                                Verified Candidate Blindspots
+                              </h4>
+                              <p className="text-[11px] text-[#64748b]">
+                                Specific technical gaps flagged by AI evaluators across your interview transcripts
+                              </p>
+                            </div>
+                            <span className="text-[10px] text-rose-700 bg-rose-50 font-semibold px-2 py-0.5 rounded border border-rose-200">
+                              {data.topBlindspots.length} Blindspots
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {data.topBlindspots.map((b, idx) => (
+                              <div
+                                key={idx}
+                                 className="p-4 rounded-xl border border-[#e2e8f0] bg-slate-50/50 flex flex-col justify-between space-y-3"
+                               >
+                                 <div className="space-y-1.5">
+                                   <div className="flex items-center justify-between">
+                                     <span className="text-xs font-bold text-[#0f172a]">{b.area}</span>
+                                     <Badge
+                                       variant={b.severity === "critical" ? "error" : "warning"}
+                                       className="text-[9px] uppercase font-bold"
+                                     >
+                                       {b.severity}
+                                     </Badge>
+                                   </div>
+                                   <p className="text-xs text-[#64748b] leading-relaxed">
+                                     {b.suggestedAction}
+                                   </p>
+                                 </div>
+
+                                 <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                                   <span className="text-[10px] text-[#94a3b8]">
+                                     Flagged {b.frequency} time{b.frequency === 1 ? "" : "s"}
+                                   </span>
+                                   <button
+                                     type="button"
+                                     onClick={() => handleLaunchDirectDrill(b.recommendedDrill || "system-design", "senior")}
+                                     disabled={launchingSession}
+                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4f46e5] text-white text-[11px] font-semibold hover:bg-[#4338ca] active:scale-95 disabled:opacity-60 transition-all shadow-2xs cursor-pointer"
+                                   >
+                                     <Play className="w-3 h-3 fill-current" />
+                                     <span>Start Targeted Drill</span>
+                                   </button>
+                                 </div>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })()}
+
+                 {/* 2. Structured 4-Stage Learning Roadmap */}
+                 <div className="p-5 rounded-2xl bg-white border border-[#e2e8f0] shadow-xs space-y-4">
+                   <div className="flex items-center justify-between">
+                     <div>
+                       <h4 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">
+                         Structured Technical Readiness Roadmap
+                       </h4>
+                       <p className="text-[11px] text-[#64748b]">
+                         Progressive step-by-step technical progression from foundational triage to staff-level scalability
+                       </p>
+                     </div>
+                     <span className="text-[10px] text-indigo-700 bg-indigo-50 font-semibold px-2 py-0.5 rounded border border-indigo-200">
+                       4 Stages
+                     </span>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     {ROADMAP_STAGES.map((st) => {
+                       const stat = data.gym?.drillStats?.find((ds) => ds.slug === st.slug);
+                       const hasAttempts = (stat?.attempts ?? 0) > 0;
+
+                       return (
+                         <div
+                           key={st.stage}
+                           className="p-4 rounded-xl border border-[#e2e8f0] bg-white hover:border-indigo-200 transition-all shadow-2xs flex flex-col justify-between space-y-3"
+                         >
+                           <div className="space-y-2">
+                             <div className="flex items-center justify-between">
+                               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                 Stage {st.stage} • {st.level.toUpperCase()}
+                               </span>
+                               <div className="flex items-center gap-1.5 text-[11px] text-[#64748b]">
+                                 <Clock className="w-3.5 h-3.5 text-[#94a3b8]" />
+                                 <span>{st.duration}</span>
+                               </div>
+                             </div>
+
+                             <div>
+                               <h5 className="text-sm font-bold text-[#0f172a]">{st.title}</h5>
+                               <p className="text-xs text-[#64748b] mt-1 leading-relaxed">
+                                 {st.description}
+                               </p>
+                             </div>
+
+                             <div className="flex flex-wrap gap-1 pt-1">
+                               {st.topics.map((t, idx) => (
+                                 <span
+                                   key={idx}
+                                   className="text-[10px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-700"
+                                 >
+                                   {t}
+                                 </span>
+                               ))}
+                             </div>
+                           </div>
+
+                           <div className="pt-2 border-t border-[#f1f5f9] flex items-center justify-between">
+                             {hasAttempts ? (
+                               <div className="flex items-center gap-2 text-[11px]">
+                                 <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                   Avg: {stat?.avgScore}%
+                                 </span>
+                                 <span className="text-[#64748b]">{stat?.attempts} attempt{stat?.attempts === 1 ? "" : "s"}</span>
+                               </div>
+                             ) : (
+                               <span className="text-[11px] text-[#94a3b8] italic">Not yet attempted</span>
+                             )}
+
+                             <button
+                               type="button"
+                               onClick={() => handleLaunchDirectDrill(st.slug, st.level)}
+                               disabled={launchingSession}
+                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#4f46e5] text-white text-xs font-semibold hover:bg-[#4338ca] active:scale-95 disabled:opacity-60 transition-all shadow-xs cursor-pointer"
+                             >
+                               <Play className="w-3 h-3 fill-current" />
+                               <span>Launch Stage {st.stage}</span>
+                             </button>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
+
+                 {/* 3. Spaced Repetition & Retention Section (if conceptMastery exists) */}
+                 {data.gym?.conceptMastery && data.gym.conceptMastery.length > 0 && (
+                   <div className="p-5 rounded-2xl bg-white border border-[#e2e8f0] shadow-xs space-y-4">
+                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                       <div>
+                         <h4 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">
+                           Concept Retention & Mastery Index
+                         </h4>
+                         <p className="text-[11px] text-[#64748b]">
+                           Strengthen concepts approaching retention decay to preserve long-term engineering mastery
+                         </p>
+                       </div>
+
+                       <button
+                         type="button"
+                         onClick={handleLaunchReviewSession}
+                         disabled={launchingSession}
+                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold active:scale-95 disabled:opacity-60 transition-all shadow-xs shrink-0 cursor-pointer"
+                       >
+                         <RefreshCcw className="w-3.5 h-3.5" />
+                         <span>Launch Review Session</span>
+                       </button>
+                     </div>
+
+                     <div className="flex flex-wrap gap-2 pt-1">
+                       {data.gym.conceptMastery.map((cm) => {
+                         const variant = cm.mastery >= 0.7 ? "success" : cm.mastery >= 0.4 ? "warning" : "error";
+                         return (
+                           <div
+                             key={cm.conceptId}
+                             className="flex items-center gap-2 p-2 rounded-xl border border-slate-200 bg-slate-50/60"
+                           >
+                             <Badge variant={variant} className="text-[10px] font-bold">
+                               {Math.round(cm.mastery * 100)}%
+                             </Badge>
+                             <span className="text-xs font-medium text-slate-700">{cm.label}</span>
+                             {cm.mastery < 0.6 && (
+                               <button
+                                 type="button"
+                                 onClick={() => handleLaunchDirectDrill(cm.drillSlug || "system-design", "senior", cm.conceptId)}
+                                 disabled={launchingSession}
+                                 className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                               >
+                                 Target →
+                               </button>
+                             )}
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 )}
+
+                 {/* 4. Score Progression Trend (if >=2 sessions) */}
+                 {data.gym?.scoreTrend && data.gym.scoreTrend.length >= 2 && mounted && (
+                   <div className="p-5 rounded-2xl bg-white border border-[#e2e8f0] shadow-xs space-y-3">
+                     <div className="flex items-center justify-between">
+                       <div>
+                         <h4 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">
+                           Practice Score Progression
+                         </h4>
+                         <p className="text-[11px] text-[#64748b]">Performance across recent completed drill sessions</p>
+                       </div>
+                       <span className="text-[10px] text-indigo-700 bg-indigo-50 font-semibold px-2 py-0.5 rounded border border-indigo-200">
+                         {data.gym.scoreTrend.length} Sessions
+                       </span>
+                     </div>
+                     <div className="h-48 w-full pt-2">
+                       <ResponsiveContainer width="100%" height="100%">
+                         <AreaChart data={data.gym.scoreTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                           <defs>
+                             <linearGradient id="gymScoreColor" x1="0" y1="0" x2="0" y2="1">
+                               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
+                               <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                             </linearGradient>
+                           </defs>
+                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                           <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                           <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} tickLine={false} />
+                           <Tooltip
+                             contentStyle={{ backgroundColor: "#0f172a", borderRadius: "12px", border: "none", color: "#fff", fontSize: "12px" }}
+                             formatter={(value) => [`${value}%`, "Score"]}
+                           />
+                           <Area type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#gymScoreColor)" />
+                         </AreaChart>
+                       </ResponsiveContainer>
+                     </div>
+                   </div>
+                 )}
+
+                 {/* 5. Navigation to Standalone Practice Hub Banner */}
+                 <div className="p-5 rounded-2xl bg-slate-900 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                   <div className="space-y-1">
+                     <div className="flex items-center gap-2">
+                       <Flame className="w-5 h-5 text-amber-400" />
+                       <h4 className="text-sm font-bold text-white">
+                         Looking to explore all 6 drills and customize difficulty tiers?
+                       </h4>
+                     </div>
+                     <p className="text-xs text-slate-300">
+                       Access the full Technical Practice catalog with timed countdown blitzes, speech recognition voice mode, and complete session history.
+                     </p>
+                   </div>
+
+                   <Link
+                     href="/practice"
+                     className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-slate-100 transition-all shadow-xs shrink-0"
+                   >
+                     <span>Go to Technical Practice Hub</span>
+                     <ArrowRight className="w-4 h-4 text-indigo-600" />
+                   </Link>
+                 </div>
+               </div>
+             )}
 
             {/* TAB 3: Action Plan & Score Trajectory */}
             {activeTab === "curriculum" && (

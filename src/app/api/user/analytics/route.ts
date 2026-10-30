@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/src/db/index";
 import { interviews } from "@/src/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { computeUserAnalytics } from "@/src/lib/analytics/user";
+import { computeUserAnalytics, computeGymAnalytics } from "@/src/lib/analytics/user";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +32,15 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(interviews.createdAt));
 
     const analyticsData = computeUserAnalytics(userInterviews);
+    const gymAnalytics = await computeGymAnalytics(userId);
 
     return NextResponse.json(
       {
         success: true,
-        data: analyticsData,
+        data: {
+          ...analyticsData,
+          gym: gymAnalytics,
+        },
       },
       {
         status: 200,

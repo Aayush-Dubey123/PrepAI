@@ -39,8 +39,15 @@ export function Header() {
   const isLiveStage =
     pathname.startsWith("/interview/") && !isLobby && !isFeedback;
 
-  if (isLiveStage || pathname === "/admin" || pathname === "/dashboard" || pathname === "/analytics") {
-    // Return null to prevent duplicate headers on live stage, admin, dashboard, and analytics cockpit
+  if (
+    isLiveStage ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/analytics") ||
+    pathname.startsWith("/practice") ||
+    pathname.startsWith("/gym")
+  ) {
+    // Return null to prevent duplicate headers on live stage, admin, dashboard, analytics, and practice routes
     return null;
   }
 
@@ -171,6 +178,13 @@ export function Header() {
               <>
                 <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
                 <span className="text-[#4f46e5] font-semibold">Admin Telemetry</span>
+              </>
+            )}
+
+            {pathname.startsWith("/practice") && (
+              <>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
+                <span className="text-[#4f46e5] font-semibold">Technical Practice</span>
               </>
             )}
           </div>

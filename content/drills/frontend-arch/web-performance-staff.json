@@ -1,0 +1,79 @@
+[
+  {
+    "slug": "frontend-arch-web-performance-staff-01",
+    "type": "mcq",
+    "level": "staff",
+    "payload": {
+      "type": "mcq",
+      "stem": "In modern React web applications, which technique best minimizes re-render churn during Web Performance & Vitals?",
+      "options": [
+        {
+          "key": "A",
+          "text": "Colocating state locally and applying startTransition for deferred background rendering"
+        },
+        {
+          "key": "B",
+          "text": "Using a single global context for all frequent state updates"
+        },
+        {
+          "key": "C",
+          "text": "Mutating the window object directly in component bodies"
+        },
+        {
+          "key": "D",
+          "text": "Wrapping all elements in nested setTimeout calls"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "State Architecture",
+          "weight": 0.7,
+          "description": "Selects state colocation and concurrent transitions."
+        },
+        {
+          "name": "Re-render Prevention",
+          "weight": 0.3,
+          "description": "Avoids global context re-render storms."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct: colocating state isolates re-renders to leaf nodes, while transitions prevent blocking main thread input.",
+    "explanation": "Broad context subscriptions trigger re-renders across all consuming components. State colocation limits the diffing subtree.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "frontend-arch-web-performance-staff-02",
+    "type": "scenario",
+    "level": "staff",
+    "payload": {
+      "type": "scenario",
+      "stem": "Design an interactive UI architecture ensuring sub-50ms Interaction to Next Paint (INP) when implementing Web Performance & Vitals.",
+      "context": "A high-frequency dashboard displays updating tables with thousands of items. Users report noticeable sluggishness on typing.",
+      "max_words": 350
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "DOM Virtualization & Containment",
+          "weight": 0.6,
+          "description": "Recommends virtual windowing and CSS containment."
+        },
+        {
+          "name": "Non-blocking Scheduling",
+          "weight": 0.4,
+          "description": "Uses Web Workers or requestIdleCallback."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "We employ DOM virtualization to render only visible items in the viewport, isolate paint with CSS `contain: strict`, and offload calculations to a Web Worker.",
+    "explanation": "Limiting DOM node volume keeps layout calculation times within the 16ms frame budget, optimizing INP scores.",
+    "review_status": "draft",
+    "version": 1
+  }
+]

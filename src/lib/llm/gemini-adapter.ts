@@ -44,21 +44,23 @@ export async function geminiGenerate(
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
 
   const timeoutMs = opts.timeoutMs ?? HEAVY_TIMEOUT_MS;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const { promise: timeoutPromise, reject: rejectTimeout } = Promise.withResolvers<never>();
+  const timer = setTimeout(() => rejectTimeout(new Error(`gemini/${opts.model} timed out after ${timeoutMs}ms`)), timeoutMs);
 
   const start = Date.now();
   const ai = getAiClient(apiKey);
   try {
-    const result = await ai.models.generateContent({
-      model: opts.model,
-      contents: opts.prompt,
-      config: {
-        systemInstruction: opts.system,
-        ...(opts.jsonSchema ? { responseMimeType: "application/json" } : {}),
-      },
-    });
-
+    const result = await Promise.race([
+      ai.models.generateContent({
+        model: opts.model,
+        contents: opts.prompt,
+        config: {
+          systemInstruction: opts.system,
+          ...(opts.jsonSchema ? { responseMimeType: "application/json" } : {}),
+        },
+      }),
+      timeoutPromise,
+    ]);
     clearTimeout(timer);
     const latencyMs = Date.now() - start;
     const text = result.text ?? "";

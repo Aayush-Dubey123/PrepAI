@@ -1,0 +1,60 @@
+[
+  {
+    "slug": "behavioral-star-star-framework-senior-01",
+    "type": "star_prompt",
+    "level": "senior",
+    "payload": {
+      "type": "star_prompt",
+      "stem": "Recount a real-world engineering challenge where you spearheaded STAR Framework Articulation at senior responsibility. Use the STAR method.",
+      "situation_hint": "Detail the Situation, your specific Task, the proactive Action you took, and the quantifiable Result."
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "STAR Articulation",
+          "weight": 0.5,
+          "description": "Clear progression through Situation, Task, Action, and Result."
+        },
+        {
+          "name": "Leadership Maturity",
+          "weight": 0.5,
+          "description": "Highlights personal engineering ownership and measurable business metrics."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Situation: Our system experienced sudden traffic spikes that increased error rates by 25%. Task: I was responsible for diagnosing the root cause. Action: I isolated the degraded microservice, applied a circuit breaker, and optimized database indexing. Result: System error rate dropped below 0.01% with 100% SLA adherence.",
+    "explanation": "High-scoring STAR responses focus on personal ownership, concrete engineering actions, and measurable outcomes.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "behavioral-star-star-framework-senior-02",
+    "type": "short_answer",
+    "level": "senior",
+    "payload": {
+      "type": "short_answer",
+      "stem": "How do you resolve interpersonal disagreements and maintain psychological safety while driving STAR Framework Articulation?",
+      "max_words": 250
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Conflict Resolution",
+          "weight": 0.5,
+          "description": "Uses data and objective metrics rather than authority."
+        },
+        {
+          "name": "Team Trust",
+          "weight": 0.5,
+          "description": "Maintains psychological safety and mutual respect."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "I de-escalate conflicts by focusing discussions on shared user outcomes, evaluating competing proposals via objective benchmarks, and committing fully to team decisions.",
+    "explanation": "Constructive resolution relies on framing differences around measurable data and fostering a blameless engineering culture.",
+    "review_status": "draft",
+    "version": 1
+  }
+]

@@ -1,3 +1,7 @@
+import { and, eq, sql } from "drizzle-orm";
+import { db } from "@/src/db";
+import { drills, drillSessions, concepts, userConceptMastery } from "@/src/db/schema";
+
 export interface UserAnalyticsSummary {
   totalInterviews: number;
   completedInterviews: number;
@@ -103,6 +107,14 @@ export interface UserAnalyticsData {
     consider: number;
     do_not_hire: number;
   };
+  gym?: GymAnalyticsData;
+};
+
+export interface GymAnalyticsData {
+  drillStats: { slug: string; title: string; avgScore: number; attempts: number }[];
+  conceptMastery: { conceptId: string; label: string; mastery: number; drillSlug?: string }[];
+  scoreTrend: { date: string; score: number; drillSlug: string }[];
+  streak: number;
 }
 
 export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsData {
@@ -428,4 +440,111 @@ export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsD
     topBlindspots,
     hiringDistribution,
   };
+}
+
+export async function computeGymAnalytics(userId: string): Promise<GymAnalyticsData> {
+  try {
+    const allDrills = await db.select({ id: drills.id, slug: drills.slug, title: drills.title }).from(drills);
+    const sessionStats = await db
+      .select({
+        drillId: drillSessions.drillId,
+        attempts: sql<number>`count(*) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+        avgScore: sql<number | null>`avg(${drillSessions.score}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+      })
+      .from(drillSessions)
+      .where(eq(drillSessions.userId, userId))
+      .groupBy(drillSessions.drillId);
+
+    const statsMap = new Map<string, { attempts: number; avgScore: number }>();
+    for (const s of sessionStats) {
+      statsMap.set(s.drillId, {
+        attempts: Number(s.attempts) || 0,
+        avgScore: s.avgScore !== null ? Math.round(Number(s.avgScore)) : 0,
+      });
+    }
+
+    const drillStats = allDrills.map((d) => ({
+      slug: d.slug,
+      title: d.title,
+      attempts: statsMap.get(d.id)?.attempts ?? 0,
+      avgScore: statsMap.get(d.id)?.avgScore ?? 0,
+    }));
+
+    const masteryRows = await db
+      .select({
+        conceptId: userConceptMastery.conceptId,
+        label: concepts.label,
+        mastery: userConceptMastery.mastery,
+        drillSlug: drills.slug,
+      })
+      .from(userConceptMastery)
+      .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
+      .innerJoin(drills, eq(drills.id, concepts.drillId))
+      .where(and(eq(userConceptMastery.userId, userId), sql`${userConceptMastery.mastery} > 0`))
+      .orderBy(userConceptMastery.mastery);
+
+    const conceptMastery = masteryRows.map((m) => ({
+      conceptId: m.conceptId,
+      label: m.label,
+      mastery: Math.round(Number(m.mastery) * 100) / 100,
+      drillSlug: m.drillSlug,
+    }));
+    const trendRows = await db
+      .select({
+        date: drillSessions.finishedAt,
+        score: drillSessions.score,
+        drillSlug: drills.slug,
+      })
+      .from(drillSessions)
+      .innerJoin(drills, eq(drills.id, drillSessions.drillId))
+      .where(and(eq(drillSessions.userId, userId), eq(drillSessions.status, "completed"), sql`${drillSessions.score} IS NOT NULL`))
+      .orderBy(drillSessions.finishedAt)
+      .limit(30);
+
+    const scoreTrend = trendRows.map((t) => ({
+      date: t.date ? new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—",
+      score: t.score ?? 0,
+      drillSlug: t.drillSlug,
+    }));
+
+    const dayRows = await db
+      .select({
+        day: sql<string>`DISTINCT TO_CHAR(${drillSessions.finishedAt}, 'YYYY-MM-DD')`,
+      })
+      .from(drillSessions)
+      .where(and(eq(drillSessions.userId, userId), eq(drillSessions.status, "completed"), sql`${drillSessions.finishedAt} IS NOT NULL`))
+      .orderBy(sql`1 DESC`);
+
+    const days = new Set(dayRows.map((r) => r.day));
+    let streak = 0;
+    const checkDate = new Date();
+    const toDateStr = (d: Date) => d.toISOString().split("T")[0];
+
+    let currentDayStr = toDateStr(checkDate);
+    if (!days.has(currentDayStr)) {
+      checkDate.setDate(checkDate.getDate() - 1);
+      currentDayStr = toDateStr(checkDate);
+    }
+
+    while (days.has(currentDayStr)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+      currentDayStr = toDateStr(checkDate);
+    }
+
+    return {
+      drillStats,
+      conceptMastery,
+      scoreTrend,
+      streak,
+    };
+  } catch (err) {
+    console.error("[COMPUTE_GYM_ANALYTICS_ERROR]", err);
+    return {
+      drillStats: [],
+      conceptMastery: [],
+      scoreTrend: [],
+      streak: 0,
+    };
+  }
 }

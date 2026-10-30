@@ -1,0 +1,237 @@
+[
+  {
+    "slug": "rapid-screen-apis-foundational-01",
+    "type": "mcq",
+    "level": "foundational",
+    "payload": {
+      "type": "mcq",
+      "stem": "In systems engineering, what is the key distinction of API Architecture & Contracts at foundational difficulty?",
+      "options": [
+        {
+          "key": "A",
+          "text": "Threads share memory within a process; separate processes have isolated virtual address spaces"
+        },
+        {
+          "key": "B",
+          "text": "Threads execute exclusively in kernel space without user code"
+        },
+        {
+          "key": "C",
+          "text": "Processes share heap memory by default without IPC"
+        },
+        {
+          "key": "D",
+          "text": "Threads cannot execute concurrent instructions"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Technical Precision",
+          "weight": 0.8,
+          "description": "Selects accurate systems/protocol definition."
+        },
+        {
+          "name": "Conceptual Clarity",
+          "weight": 0.2,
+          "description": "Understands operational consequences."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct because Processes have isolated memory spaces protected by hardware MMU page tables, whereas threads in the .",
+    "explanation": "Processes have isolated memory spaces protected by hardware MMU page tables, whereas threads in the same process share heap and data segments.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "rapid-screen-apis-foundational-02",
+    "type": "mcq",
+    "level": "foundational",
+    "payload": {
+      "type": "mcq",
+      "stem": "Which HTTP response status code indicates a client has exceeded rate limit quotas for API Architecture & Contracts?",
+      "options": [
+        {
+          "key": "A",
+          "text": "429 Too Many Requests"
+        },
+        {
+          "key": "B",
+          "text": "502 Bad Gateway"
+        },
+        {
+          "key": "C",
+          "text": "401 Unauthorized"
+        },
+        {
+          "key": "D",
+          "text": "404 Not Found"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Technical Precision",
+          "weight": 0.8,
+          "description": "Selects accurate systems/protocol definition."
+        },
+        {
+          "name": "Conceptual Clarity",
+          "weight": 0.2,
+          "description": "Understands operational consequences."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct because RFC 6585 specifies HTTP 429 Too Many Requests for rate-limited clients, typically paired with a Retr.",
+    "explanation": "RFC 6585 specifies HTTP 429 Too Many Requests for rate-limited clients, typically paired with a Retry-After header.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "rapid-screen-apis-foundational-03",
+    "type": "mcq",
+    "level": "foundational",
+    "payload": {
+      "type": "mcq",
+      "stem": "How does binary protocol serialization (such as Protocol Buffers) improve network performance in API Architecture & Contracts?",
+      "options": [
+        {
+          "key": "A",
+          "text": "Encodes structured fields as compact binary varints, eliminating textual JSON parsing overhead"
+        },
+        {
+          "key": "B",
+          "text": "Converts data into uncompressed base64 strings"
+        },
+        {
+          "key": "C",
+          "text": "Skips type validation entirely across clients"
+        },
+        {
+          "key": "D",
+          "text": "Requires physical fiber optic connections"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Technical Precision",
+          "weight": 0.8,
+          "description": "Selects accurate systems/protocol definition."
+        },
+        {
+          "name": "Conceptual Clarity",
+          "weight": 0.2,
+          "description": "Understands operational consequences."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct because Binary protocols serialize data into minimal bitstreams using field tags and varints, drastically re.",
+    "explanation": "Binary protocols serialize data into minimal bitstreams using field tags and varints, drastically reducing payload size and CPU parse time.",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "rapid-screen-apis-foundational-04",
+    "type": "mcq",
+    "level": "foundational",
+    "payload": {
+      "type": "mcq",
+      "stem": "In the JavaScript event loop, what is the execution priority between Promise microtasks and timer macrotasks in API Architecture & Contracts?",
+      "options": [
+        {
+          "key": "A",
+          "text": "The microtask queue is completely drained after each call stack frame before the next macrotask runs"
+        },
+        {
+          "key": "B",
+          "text": "Macrotasks always preempt microtasks"
+        },
+        {
+          "key": "C",
+          "text": "Timers run synchronously before Promise callbacks"
+        },
+        {
+          "key": "D",
+          "text": "Microtasks and macrotasks run in parallel threads"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Technical Precision",
+          "weight": 0.8,
+          "description": "Selects accurate systems/protocol definition."
+        },
+        {
+          "name": "Conceptual Clarity",
+          "weight": 0.2,
+          "description": "Understands operational consequences."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct because The ECMAScript specification guarantees that microtasks (Promises) drain to completion before the ev.",
+    "explanation": "The ECMAScript specification guarantees that microtasks (Promises) drain to completion before the event loop yields to macrotasks (setTimeout).",
+    "review_status": "draft",
+    "version": 1
+  },
+  {
+    "slug": "rapid-screen-apis-foundational-05",
+    "type": "mcq",
+    "level": "foundational",
+    "payload": {
+      "type": "mcq",
+      "stem": "What primary failure does enforcing idempotency keys prevent during network dropouts in API Architecture & Contracts?",
+      "options": [
+        {
+          "key": "A",
+          "text": "Accidental duplicate executions and billing charges caused by automated client retries"
+        },
+        {
+          "key": "B",
+          "text": "Cross-site scripting (XSS) injection"
+        },
+        {
+          "key": "C",
+          "text": "Database buffer pool memory exhaustion"
+        },
+        {
+          "key": "D",
+          "text": "Operating system kernel panic"
+        }
+      ],
+      "correct_key": "A"
+    },
+    "rubric": {
+      "criteria": [
+        {
+          "name": "Technical Precision",
+          "weight": 0.8,
+          "description": "Selects accurate systems/protocol definition."
+        },
+        {
+          "name": "Conceptual Clarity",
+          "weight": 0.2,
+          "description": "Understands operational consequences."
+        }
+      ],
+      "passing_threshold": 0.6
+    },
+    "model_answer": "Option A is correct because Idempotency keys allow servers to recognize retransmitted mutation requests and return the cached re.",
+    "explanation": "Idempotency keys allow servers to recognize retransmitted mutation requests and return the cached result without repeating the mutation.",
+    "review_status": "draft",
+    "version": 1
+  }
+]

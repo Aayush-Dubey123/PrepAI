@@ -19,7 +19,11 @@
     "eval:export-turns": "tsx src/eval/export-turns.ts",
     "eval:export-questions": "tsx src/eval/export-questions.ts",
     "eval:report": "tsx src/eval/run-report.ts",
-    "eval:generate-doc": "tsx src/eval/generate-viva-doc.ts"
+    "eval:generate-doc": "tsx src/eval/generate-viva-doc.ts",
+    "seed:drills": "tsx scripts/content/seed-drills.ts",
+    "content:audit": "tsx scripts/content/audit-content.ts",
+    "content:approve": "tsx scripts/content/approve-questions.ts",
+    "content:review": "tsx scripts/content/review-questions.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.2.7",

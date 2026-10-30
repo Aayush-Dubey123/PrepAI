@@ -50,7 +50,7 @@ async function runTests() {
     console.log("\n▶ Test 2: Non-admin candidate rejection");
     {
       process.env.ADMIN_USER_IDS = "admin_clerk_id_999";
-      process.env.NODE_ENV = "production";
+      (process.env as Record<string, string | undefined>).NODE_ENV = "production";
 
       const candidateResult = await checkIsAdmin(undefined, {
         userId: "candidate_clerk_id_123",
@@ -69,7 +69,7 @@ async function runTests() {
     console.log("\n▶ Test 3: Admin authorization via allowlist & role claims");
     {
       process.env.ADMIN_USER_IDS = "admin_clerk_id_999,admin_ops_id_777";
-      process.env.NODE_ENV = "production";
+      (process.env as Record<string, string | undefined>).NODE_ENV = "production";
 
       // 3a. Matching user in allowlist
       const allowlistedAdmin = await checkIsAdmin(undefined, {
@@ -101,7 +101,7 @@ async function runTests() {
     {
       process.env.ADMIN_USER_IDS = "admin_clerk_id_999";
       process.env.ADMIN_ALLOWED_IPS = "192.168.1.50,10.0.0.1";
-      process.env.NODE_ENV = "production";
+      (process.env as Record<string, string | undefined>).NODE_ENV = "production";
 
       // Disallowed client IP
       const mockDisallowedReq = {

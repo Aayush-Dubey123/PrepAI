@@ -20,6 +20,15 @@ const nextConfig: NextConfig = {
     "mammoth",
     "unpdf",
   ],
+  async redirects() {
+    return [
+      {
+        source: "/gym/:path*",
+        destination: "/practice/:path*",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

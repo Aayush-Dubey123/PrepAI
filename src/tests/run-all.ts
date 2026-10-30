@@ -19,10 +19,16 @@ const testSuites = [
   { name: "Audio Conversation & Overlap", file: "src/tests/audio-conversation.test.ts" },
   { name: "Interview Deletion & Retention", file: "src/tests/interview-deletion.test.ts" },
   { name: "Security & Access Control", file: "src/tests/security.test.ts" },
+  { name: "Drill Deterministic & LLM Grading", file: "src/tests/drill-grading.test.ts" },
+  { name: "Drill Smart Set Builder", file: "src/tests/drill-set-builder.test.ts" },
+  { name: "Drill Mastery EMA & Spaced Repetition", file: "src/tests/drill-mastery.test.ts" },
+  { name: "Drill Idempotency & Concurrency", file: "src/tests/drill-idempotency.test.ts" },
+  { name: "Drill Seed Data Validation", file: "src/tests/drill-seed-validation.test.ts" },
+  { name: "Drill Targeted Sessions & Feature Guards", file: "src/tests/drill-targeted-sessions.test.ts" },
 ];
 
-if (testSuites.length !== 11) {
-  console.error(`Expected exactly 11 test suites, found ${testSuites.length}`);
+if (testSuites.length !== 17) {
+  console.error(`Expected exactly 17 test suites, found ${testSuites.length}`);
   process.exit(1);
 }
 
