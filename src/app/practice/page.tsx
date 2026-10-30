@@ -56,83 +56,124 @@ export default async function TechnicalPracticePage() {
     redirect("/sign-in");
   }
 
-  // 1. Fetch drills
-  const allDrills = await db.select().from(drills).orderBy(drills.slug);
-
-  // 2. Fetch session stats per drill
-  const sessionStats = await db
-    .select({
-      drillId: drillSessions.drillId,
-      attempts: sql<number>`count(*) FILTER (WHERE ${drillSessions.status} = 'completed')`,
-      bestScore: sql<number | null>`max(${drillSessions.score}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
-      lastPracticed: sql<string | null>`max(${drillSessions.finishedAt}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
-    })
-    .from(drillSessions)
-    .where(eq(drillSessions.userId, userId))
-    .groupBy(drillSessions.drillId);
-
+  let allDrills: any[] = [];
   const statsMap = new Map<string, { attempts: number; bestScore: number | null; lastPracticed: string | null }>();
-  for (const s of sessionStats) {
-    statsMap.set(s.drillId, {
-      attempts: Number(s.attempts) || 0,
-      bestScore: s.bestScore !== null ? Number(s.bestScore) : null,
-      lastPracticed: s.lastPracticed ? new Date(s.lastPracticed).toISOString() : null,
-    });
-  }
-
-  // 3. Fetch concept mastery per drill
-  const masteryStats = await db
-    .select({
-      drillId: concepts.drillId,
-      avgMastery: sql<number>`avg(${userConceptMastery.mastery})`,
-    })
-    .from(userConceptMastery)
-    .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
-    .where(eq(userConceptMastery.userId, userId))
-    .groupBy(concepts.drillId);
-
   const masteryMap = new Map<string, number>();
-  for (const m of masteryStats) {
-    if (m.avgMastery !== null) {
-      masteryMap.set(m.drillId, Math.round(Number(m.avgMastery) * 100));
+  let overdueCount = 0;
+  let overdueDrillSlug = "system-design";
+  const conceptTagsMap = new Map<string, string[]>();
+
+  try {
+    // 1. Fetch drills
+    allDrills = await db.select().from(drills).orderBy(drills.slug);
+
+    // 2. Fetch session stats per drill
+    const sessionStats = await db
+      .select({
+        drillId: drillSessions.drillId,
+        attempts: sql<number>`count(*) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+        bestScore: sql<number | null>`max(${drillSessions.score}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+        lastPracticed: sql<string | null>`max(${drillSessions.finishedAt}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+      })
+      .from(drillSessions)
+      .where(eq(drillSessions.userId, userId))
+      .groupBy(drillSessions.drillId);
+
+    for (const s of sessionStats) {
+      statsMap.set(s.drillId, {
+        attempts: Number(s.attempts) || 0,
+        bestScore: s.bestScore !== null ? Number(s.bestScore) : null,
+        lastPracticed: s.lastPracticed ? new Date(s.lastPracticed).toISOString() : null,
+      });
     }
+
+    // 3. Fetch concept mastery per drill
+    const masteryStats = await db
+      .select({
+        drillId: concepts.drillId,
+        avgMastery: sql<number>`avg(${userConceptMastery.mastery})`,
+      })
+      .from(userConceptMastery)
+      .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
+      .where(eq(userConceptMastery.userId, userId))
+      .groupBy(concepts.drillId);
+
+    for (const m of masteryStats) {
+      if (m.avgMastery !== null) {
+        masteryMap.set(m.drillId, Math.round(Number(m.avgMastery) * 100));
+      }
+    }
+
+    // 4. Overdue concepts for Spaced Repetition banner
+    const overdueRows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(userConceptMastery)
+      .where(sql`${userConceptMastery.userId} = ${userId} AND ${userConceptMastery.nextDue} <= now()`);
+
+    overdueCount = Number(overdueRows[0]?.count) || 0;
+
+    const overdueDrillRows = overdueCount > 0 ? await db
+      .select({
+        drillSlug: drills.slug,
+      })
+      .from(userConceptMastery)
+      .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
+      .innerJoin(drills, eq(drills.id, concepts.drillId))
+      .where(sql`${userConceptMastery.userId} = ${userId} AND ${userConceptMastery.nextDue} <= now()`)
+      .limit(1) : [];
+    overdueDrillSlug = overdueDrillRows[0]?.drillSlug ?? "system-design";
+
+    // 5. Get root concepts per drill for focus tags
+    const rootConcepts = await db
+      .select({
+        drillId: concepts.drillId,
+        label: concepts.label,
+      })
+      .from(concepts)
+      .where(sql`${concepts.parentId} IS NULL`)
+      .orderBy(concepts.sortOrder);
+
+    for (const c of rootConcepts) {
+      const arr = conceptTagsMap.get(c.drillId) || [];
+      arr.push(c.label);
+      conceptTagsMap.set(c.drillId, arr);
+    }
+  } catch (err) {
+    console.error("[PRACTICE_PAGE_FETCH_ERROR] Database query failed or uninitialized tables:", err);
   }
 
-  // 4. Overdue concepts for Spaced Repetition banner
-  const overdueRows = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(userConceptMastery)
-    .where(sql`${userConceptMastery.userId} = ${userId} AND ${userConceptMastery.nextDue} <= now()`);
+  if (allDrills.length === 0) {
+    return (
+      <div className="h-full w-full max-w-7xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between">
+        <div className="shrink-0 flex items-center justify-between border-b border-[#e2e8f0] pb-2.5">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg text-white shadow-2xs shrink-0">
+              <Flame className="w-4 h-4 text-amber-300" />
+            </div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold text-[#0f172a] tracking-tight whitespace-nowrap">Technical Practice</h1>
+              <Badge variant="purple" className="text-[9px] uppercase font-semibold shrink-0">Modular Drills</Badge>
+            </div>
+          </div>
+        </div>
 
-  const overdueCount = Number(overdueRows[0]?.count) || 0;
-
-  // Get drill with overdue concepts for review session CTA
-  const overdueDrillRows = overdueCount > 0 ? await db
-    .select({
-      drillSlug: drills.slug,
-    })
-    .from(userConceptMastery)
-    .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
-    .innerJoin(drills, eq(drills.id, concepts.drillId))
-    .where(sql`${userConceptMastery.userId} = ${userId} AND ${userConceptMastery.nextDue} <= now()`)
-    .limit(1) : [];
-  const overdueDrillSlug = overdueDrillRows[0]?.drillSlug ?? "system-design";
-
-  // 5. Get root concepts per drill for focus tags
-  const rootConcepts = await db
-    .select({
-      drillId: concepts.drillId,
-      label: concepts.label,
-    })
-    .from(concepts)
-    .where(sql`${concepts.parentId} IS NULL`)
-    .orderBy(concepts.sortOrder);
-
-  const conceptTagsMap = new Map<string, string[]>();
-  for (const c of rootConcepts) {
-    const arr = conceptTagsMap.get(c.drillId) || [];
-    arr.push(c.label);
-    conceptTagsMap.set(c.drillId, arr);
+        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white rounded-2xl border border-[#e2e8f0] shadow-sm text-center max-w-md mx-auto my-auto space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-bold text-[#0f172a]">Practice Library Initializing</h2>
+            <p className="text-xs text-[#64748b] leading-relaxed">
+              Drill tracks and question banks have not been populated in the database yet. Run the seed command to activate all 6 practice tracks.
+            </p>
+          </div>
+          <div className="p-3 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] text-left w-full font-mono text-[11px] text-[#475569] space-y-1">
+            <p className="font-semibold text-slate-700">Database Seed Command:</p>
+            <code className="block bg-slate-100 p-2 rounded text-indigo-700 select-all">npm run seed:drills</code>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -25,12 +25,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Strictly fetch only rows belonging to this authenticated user
-    const userInterviews = await db
-      .select()
-      .from(interviews)
-      .where(eq(interviews.userId, userId))
-      .orderBy(desc(interviews.createdAt));
-
+    let userInterviews: Array<any> = [];
+    try {
+      userInterviews = await db
+        .select()
+        .from(interviews)
+        .where(eq(interviews.userId, userId))
+        .orderBy(desc(interviews.createdAt));
+    } catch (dbErr) {
+      console.warn("[USER_ANALYTICS] Interviews query fallback (tables may be uninitialized):", dbErr);
+    }
     const analyticsData = computeUserAnalytics(userInterviews);
     const gymAnalytics = await computeGymAnalytics(userId);
 
