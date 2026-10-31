@@ -83,7 +83,7 @@ function QuestionPlayer() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionData | null>(null);
   const [userAnswer, setUserAnswer] = useState<unknown>("");
-  const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
+  const [questionStartTime, setQuestionStartTime] = useState<number>(() => Date.now());
 
   // State machine: loading | answering | submitting | feedback | self_assessment | finished | error
   const [viewState, setViewState] = useState<
@@ -117,7 +117,51 @@ function QuestionPlayer() {
   const [reportDetails, setReportDetails] = useState<string>("");
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
-  // 1. Fetch Session Info
+  // 1. Finish Session
+  const finishSession = useCallback(async (sid: string) => {
+    setViewState("submitting");
+    try {
+      const res = await fetch(`/api/drill-sessions/${sid}/finish`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to finish session");
+      }
+
+      setFinishData(data);
+      setViewState("finished");
+    } catch (err: unknown) {
+      setViewState("error");
+      setErrorMessage(err instanceof Error ? err.message : "Failed to finalize session");
+    }
+  }, []);
+
+  // 2. Fetch Question at Index
+  const fetchQuestion = useCallback(async (sid: string, index: number) => {
+    try {
+      setViewState("loading");
+      const res = await fetch(`/api/drill-sessions/${sid}/questions/${index}`);
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.code === "SESSION_EXPIRED" || data.code === "SESSION_ENDED") {
+          await finishSession(sid);
+          return;
+        }
+        throw new Error(data.error || "Failed to fetch question");
+      }
+
+      setCurrentQuestion(data);
+      setUserAnswer("");
+      setQuestionStartTime(Date.now());
+      setViewState("answering");
+    } catch (err: unknown) {
+      setViewState("error");
+      setErrorMessage(err instanceof Error ? err.message : "Failed to fetch question");
+    }
+  }, [finishSession]);
+
+  // 3. Fetch Session Info
   const fetchSession = useCallback(async () => {
     if (!sessionId || sessionId === "undefined" || sessionId === "null") {
       toast("Select or start a drill set to begin practice.", { type: "info" });
@@ -163,31 +207,7 @@ function QuestionPlayer() {
       setViewState("error");
       setErrorMessage(err instanceof Error ? err.message : "Failed to load session");
     }
-  }, [sessionId, drillSlug, router, toast]);
-
-  // 2. Fetch Question at Index
-  const fetchQuestion = async (sid: string, index: number) => {
-    try {
-      setViewState("loading");
-      const res = await fetch(`/api/drill-sessions/${sid}/questions/${index}`);
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.code === "SESSION_EXPIRED" || data.code === "SESSION_ENDED") {
-          await finishSession(sid);
-          return;
-        }
-        throw new Error(data.error || "Failed to fetch question");
-      }
-
-      setCurrentQuestion(data);
-      setUserAnswer("");
-      setQuestionStartTime(Date.now());
-      setViewState("answering");
-    } catch (err: unknown) {
-      setViewState("error");
-      setErrorMessage(err instanceof Error ? err.message : "Failed to fetch question");
-    }
-  };
+  }, [sessionId, drillSlug, router, toast, finishSession, fetchQuestion]);
 
   // 3. Countdown timer for Timed Sessions
   useEffect(() => {
@@ -213,8 +233,19 @@ function QuestionPlayer() {
     fetchSession();
   }, [fetchSession]);
 
-  // 4. Submit Answer
-  const handleSubmitAnswer = async () => {
+  // 4. Advance Next Question
+  const advanceNextQuestion = useCallback(() => {
+    if (!session || !currentQuestion) return;
+    const nextIdx = currentQuestion.index + 1;
+    if (nextIdx >= currentQuestion.totalQuestions) {
+      finishSession(session.id);
+    } else {
+      fetchQuestion(session.id, nextIdx);
+    }
+  }, [session, currentQuestion, finishSession, fetchQuestion]);
+
+  // 5. Submit Answer
+  const handleSubmitAnswer = useCallback(async () => {
     if (!session || !currentQuestion) return;
 
     const timeTakenMs = Date.now() - questionStartTime;
@@ -262,10 +293,10 @@ function QuestionPlayer() {
       toast(`Submission Error: ${err instanceof Error ? err.message : "Failed to grade answer"}`, { type: "error" });
       setViewState("answering");
     }
-  };
+  }, [session, currentQuestion, questionStartTime, userAnswer, finishSession, advanceNextQuestion, toast]);
 
-  // 5. Submit Self-Assessment Rating
-  const handleSelfAssessmentSubmit = async () => {
+  // 6. Submit Self-Assessment Rating
+  const handleSelfAssessmentSubmit = useCallback(async () => {
     if (!session || !currentQuestion) return;
 
     try {
@@ -287,40 +318,9 @@ function QuestionPlayer() {
     } catch (err: unknown) {
       toast(`Error: ${err instanceof Error ? err.message : "Failed to record rating"}`, { type: "error" });
     }
-  };
+  }, [session, currentQuestion, selfRating, toast, advanceNextQuestion]);
 
-  // 6. Advance Next Question
-  const advanceNextQuestion = () => {
-    if (!session || !currentQuestion) return;
-    const nextIdx = currentQuestion.index + 1;
-    if (nextIdx >= currentQuestion.totalQuestions) {
-      finishSession(session.id);
-    } else {
-      fetchQuestion(session.id, nextIdx);
-    }
-  };
-
-  // 7. Finish Session
-  const finishSession = async (sid: string) => {
-    setViewState("submitting");
-    try {
-      const res = await fetch(`/api/drill-sessions/${sid}/finish`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to finish session");
-      }
-
-      setFinishData(data);
-      setViewState("finished");
-    } catch (err: unknown) {
-      setViewState("error");
-      setErrorMessage(err instanceof Error ? err.message : "Failed to finalize session");
-    }
-  };
-
-  // 8. Submit Question Report
+  // 7. Submit Question Report
   const handleReportSubmit = async () => {
     if (!session || !currentQuestion) return;
     setReportSubmitting(true);

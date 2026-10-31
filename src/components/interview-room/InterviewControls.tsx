@@ -69,7 +69,7 @@ export function InterviewControls({
       </div>
 
       {/* Floating Glass Dock */}
-      <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-2 sm:py-3 rounded-2xl bg-white/95 border border-[#e2e8f0] shadow-xl backdrop-blur-xl max-w-full">
+      <div className="flex items-center flex-nowrap gap-1.5 sm:gap-4 px-2.5 sm:px-5 py-2 sm:py-3 rounded-2xl bg-white/95 border border-[#e2e8f0] shadow-xl backdrop-blur-xl max-w-full overflow-x-auto scrollbar-none">
         {/* Mic / Push to Talk */}
         {supportsSpeechRecognition ? (
           <Button

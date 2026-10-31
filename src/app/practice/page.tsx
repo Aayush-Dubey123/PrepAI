@@ -56,7 +56,7 @@ export default async function TechnicalPracticePage() {
     redirect("/sign-in");
   }
 
-  let allDrills: any[] = [];
+  let allDrills: (typeof drills.$inferSelect)[] = [];
   const statsMap = new Map<string, { attempts: number; bestScore: number | null; lastPracticed: string | null }>();
   const masteryMap = new Map<string, number>();
   let overdueCount = 0;

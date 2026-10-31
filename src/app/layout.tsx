@@ -5,6 +5,7 @@ import "./globals.css";
 import { Header } from "@/src/components/header";
 import { CookieConsent } from "@/src/components/cookie-consent";
 import { ToastProvider } from "@/src/components/ui/ToastProvider";
+import { NavigationProgressBar } from "@/src/components/navigation-progress";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#f4f6fa] text-[#0f172a] min-h-screen`}>
         <ClerkProvider>
           <ToastProvider>
+            <NavigationProgressBar />
             <Header />
             {children}
             <CookieConsent />

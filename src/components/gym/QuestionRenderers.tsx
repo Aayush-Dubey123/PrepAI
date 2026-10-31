@@ -201,15 +201,19 @@ export function CodeTraceRenderer({ payload, value, onChange, disabled }: Render
 }
 
 export function FixTheBugRenderer({ payload, value, onChange, disabled }: RendererProps) {
-  if (payload.type !== "fix_the_bug") return null;
-  const code = typeof value === "string" ? value : payload.buggy_code;
   const [showHint, setShowHint] = useState(false);
+  const isTarget = payload.type === "fix_the_bug";
+  const buggyCode = isTarget ? payload.buggy_code : "";
+  const code = typeof value === "string" ? value : buggyCode;
 
   useEffect(() => {
+    if (!isTarget) return;
     if (value === undefined || value === "") {
-      onChange(payload.buggy_code);
+      onChange(buggyCode);
     }
-  }, [payload.buggy_code, value, onChange]);
+  }, [isTarget, buggyCode, value, onChange]);
+
+  if (!isTarget) return null;
 
   return (
     <div className="space-y-4">
@@ -319,14 +323,16 @@ export function StarPromptRenderer({ payload, value, onChange, disabled }: Rende
 }
 
 export function VoiceAnswerRenderer({ payload, value, onChange, disabled }: RendererProps) {
-  if (payload.type !== "voice_answer") return null;
+  const isTarget = payload.type === "voice_answer";
   const text = typeof value === "string" ? value : "";
-  const maxDuration = payload.max_duration_seconds ?? 120;
+  const maxDuration = isTarget ? (payload.max_duration_seconds ?? 120) : 120;
   const [secondsLeft, setSecondsLeft] = useState(maxDuration);
 
   const { isListening, interimTranscript, startListening, stopListening, supportsSpeechRecognition } =
     useSpeechInput({
+      enabled: isTarget,
       onFinalTranscript: (chunk) => {
+        if (!isTarget) return;
         const next = text ? `${text} ${chunk}` : chunk;
         onChange(next.trim());
       },
@@ -334,7 +340,7 @@ export function VoiceAnswerRenderer({ payload, value, onChange, disabled }: Rend
 
   // Countdown timer while speaking
   useEffect(() => {
-    if (!isListening) return;
+    if (!isTarget || !isListening) return;
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
@@ -345,7 +351,9 @@ export function VoiceAnswerRenderer({ payload, value, onChange, disabled }: Rend
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isListening, stopListening]);
+  }, [isTarget, isListening, stopListening]);
+
+  if (!isTarget) return null;
 
   return (
     <div className="space-y-4">

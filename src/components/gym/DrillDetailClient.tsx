@@ -69,12 +69,6 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
   const [loadingSmart, setLoadingSmart] = useState(false);
   const hasAutoRunRef = useRef(false);
 
-  useEffect(() => {
-    if (initialAutoReview && !hasAutoRunRef.current) {
-      hasAutoRunRef.current = true;
-      startSession(undefined, true);
-    }
-  }, [initialAutoReview]);
   const completed = history.filter((h) => h.score !== null);
   const completedCount = completed.length;
   const bestScore = completed.length > 0 ? Math.max(...completed.map((h) => h.score || 0)) : null;
@@ -118,6 +112,13 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
       setLoadingSmart(false);
     }
   };
+
+  useEffect(() => {
+    if (initialAutoReview && !hasAutoRunRef.current) {
+      hasAutoRunRef.current = true;
+      startSession(undefined, true);
+    }
+  }, [initialAutoReview]);
 
   return (
     <div className="min-h-full h-auto lg:h-full w-full max-w-7xl mx-auto p-3 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-start lg:justify-between overflow-visible lg:overflow-hidden">

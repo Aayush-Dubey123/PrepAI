@@ -24,12 +24,14 @@ import { Badge } from "@/src/components/ui/Badge";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { isTechnicalPracticeEnabled } from "@/src/lib/config";
 
+let globalIsAdminCache: boolean | null = null;
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const { toast } = useToast();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(globalIsAdminCache ?? false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
@@ -91,12 +93,15 @@ export function AppSidebar() {
     };
   }, [isMobileMenuOpen]);
   useEffect(() => {
+    if (globalIsAdminCache !== null) return;
     let ignore = false;
     fetch("/api/admin/check")
       .then((res) => res.json())
       .then((data) => {
-        if (!ignore && data?.isAdmin) {
-          setIsAdmin(true);
+        if (!ignore) {
+          const adminStatus = Boolean(data?.isAdmin);
+          globalIsAdminCache = adminStatus;
+          setIsAdmin(adminStatus);
         }
       })
       .catch(() => {

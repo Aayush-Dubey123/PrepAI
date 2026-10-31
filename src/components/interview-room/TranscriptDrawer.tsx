@@ -49,7 +49,14 @@ export function TranscriptDrawer({
   if (!isOpen) return null;
 
   return (
-    <aside className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 bg-white/95 border-l border-[#e2e8f0] text-[#0f172a] backdrop-blur-2xl flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
+    <>
+      {/* Dismissal backdrop overlay to isolate drawer and block accidental background clicks */}
+      <div
+        className="fixed inset-0 z-[35] bg-black/30 backdrop-blur-xs transition-opacity duration-200"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 bg-white/95 border-l border-[#e2e8f0] text-[#0f172a] backdrop-blur-2xl flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="h-14 px-4 border-b border-[#e2e8f0] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
@@ -187,5 +194,6 @@ export function TranscriptDrawer({
         </p>
       </div>
     </aside>
+    </>
   );
 }

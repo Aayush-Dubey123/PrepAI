@@ -111,6 +111,10 @@
   --font-sans: var(--font-geist-sans), "Geist", system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono), "Geist Mono", monospace;
 }
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   min-height: 100%;
@@ -223,4 +227,20 @@ body {
 }
 .animate-shimmer-dot-3 {
   animation: shimmer-pulse 1.4s ease-in-out infinite 0.4s;
+}
+/* App-wide Smooth Page Transition */
+@keyframes page-enter {
+  0% {
+    opacity: 0.7;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: page-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
 }

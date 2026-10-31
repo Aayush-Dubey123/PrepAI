@@ -36,10 +36,12 @@ export interface InterviewHistoryProps {
   onLoaded?: (interviews: InterviewSummary[]) => void;
 }
 
+let globalHistoryCache: InterviewSummary[] | null = null;
+
 export function InterviewHistory({ onLoaded }: InterviewHistoryProps) {
   const { toast } = useToast();
-  const [interviews, setInterviews] = useState<InterviewSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [interviews, setInterviews] = useState<InterviewSummary[]>(globalHistoryCache ?? []);
+  const [loading, setLoading] = useState(!globalHistoryCache);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "ongoing">("all");
@@ -55,6 +57,7 @@ export function InterviewHistory({ onLoaded }: InterviewHistoryProps) {
       const res = await fetch("/api/interviews");
       const data = await res.json();
       if (Array.isArray(data.interviews)) {
+        globalHistoryCache = data.interviews;
         setInterviews(data.interviews);
         onLoaded?.(data.interviews);
       }
@@ -64,6 +67,9 @@ export function InterviewHistory({ onLoaded }: InterviewHistoryProps) {
   };
 
   useEffect(() => {
+    if (globalHistoryCache) {
+      onLoaded?.(globalHistoryCache);
+    }
     fetchRecords().finally(() => setLoading(false));
   }, []);
 
@@ -350,7 +356,7 @@ export function InterviewHistory({ onLoaded }: InterviewHistoryProps) {
                 </div>
 
                 {/* Zone 2: Middle Progress & Metric Indicator */}
-                <div className="shrink-0 flex items-center gap-3 self-end md:self-auto">
+                <div className="w-full md:w-auto shrink-0 flex items-center justify-between md:justify-end gap-2 sm:gap-3 pt-2 md:pt-0 border-t border-slate-100 md:border-t-0">
                   {score !== null && score !== undefined ? (
                     <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#f8fafc] border border-[#e2e8f0]">
                       <Award className="w-3.5 h-3.5 text-[#4f46e5]" />
