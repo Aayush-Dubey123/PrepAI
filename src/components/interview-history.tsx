@@ -140,7 +140,7 @@ export function InterviewHistory({ onLoaded }: InterviewHistoryProps) {
   });
 
   return (
-    <Card className="h-full w-full flex flex-col overflow-hidden p-4 sm:p-5 bg-white border border-[#e2e8f0] shadow-xs">
+    <Card className="h-auto lg:h-full min-h-[380px] lg:min-h-0 w-full flex flex-col overflow-hidden p-4 sm:p-5 bg-white border border-[#e2e8f0] shadow-xs">
       {/* 1. Header: Complete One-Line Layout Across Full Width */}
       <div className="w-full shrink-0 pb-3 flex items-center justify-between gap-3 border-b border-[#f1f5f9]">
         {/* Left: Icon, Title, Count Badge, and Description all in ONE clean line */}
@@ -233,7 +233,7 @@ export function InterviewHistory({ onLoaded }: InterviewHistoryProps) {
         </div>
 
         {/* Filter Segmented Control on the right */}
-        <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-xl border border-[#e2e8f0] text-[11px] shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-xl border border-[#e2e8f0] text-[11px] shrink-0 max-w-full overflow-x-auto scrollbar-none self-start sm:self-auto">
           <button
             onClick={() => setStatusFilter("all")}
             className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${

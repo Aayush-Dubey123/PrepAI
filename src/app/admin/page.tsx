@@ -298,8 +298,11 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider">Platform Operations & Admin Console</h1>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-[9px] font-mono font-semibold text-indigo-700">
+                <h1 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider truncate max-w-[130px] sm:max-w-none">
+                  <span className="sm:hidden">Admin Console</span>
+                  <span className="hidden sm:inline">Platform Operations & Admin Console</span>
+                </h1>
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-[9px] font-mono font-semibold text-indigo-700">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
                   RESTRICTED STAFF
                 </span>
@@ -333,7 +336,8 @@ export default function AdminDashboardPage() {
             ) : (
               <Download size={13} />
             )}
-            <span>Export Report PDF</span>
+            <span className="hidden sm:inline">Export Report PDF</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </header>
@@ -341,8 +345,8 @@ export default function AdminDashboardPage() {
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6" ref={reportRef}>
         {/* Navigation Tabs Bar */}
-        <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
-          <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-xl border border-[#e2e8f0] overflow-x-auto no-scrollbar">
+        <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3 max-w-full overflow-hidden">
+          <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-xl border border-[#e2e8f0] overflow-x-auto scrollbar-none w-full max-w-full">
             {[
               { id: "overview", label: "Platform Overview", icon: <Layers size={14} /> },
               { id: "scoring", label: "Scoring & Hiring", icon: <BarChart3 size={14} /> },
@@ -379,7 +383,7 @@ export default function AdminDashboardPage() {
         {activeTab === "overview" && (
           <div className="space-y-6 animate-in fade-in duration-300">
             {/* Quick KPI Stat Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard
                 icon={<Users size={18} />}
                 label="Total Candidate Sessions"

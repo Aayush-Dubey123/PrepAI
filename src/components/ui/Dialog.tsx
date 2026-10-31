@@ -130,7 +130,7 @@ export function DialogContent({
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "relative z-50 w-full max-w-lg rounded-2xl bg-white border border-[#e2e8f0] p-6 shadow-2xl transition-all duration-200 animate-in zoom-in-95",
+          "relative z-50 w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-white border border-[#e2e8f0] p-4 sm:p-6 shadow-2xl transition-all duration-200 animate-in zoom-in-95",
           className
         )}
         {...props}

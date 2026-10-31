@@ -171,7 +171,7 @@ export function InterviewerTile({
   );
 
   return (
-    <div className="relative h-full w-full rounded-2xl border border-[#e2e8f0] bg-white overflow-hidden flex flex-col items-center justify-between p-4 sm:p-5 shadow-sm group">
+    <div className="relative min-h-[260px] md:min-h-0 h-auto md:h-full w-full rounded-2xl border border-[#e2e8f0] bg-white overflow-hidden flex flex-col items-center justify-between p-3 sm:p-5 shadow-sm group">
       {/* Background radial glow */}
       <div
         className={`pointer-events-none absolute inset-0 transition-opacity duration-700 ${
@@ -282,7 +282,7 @@ export function InterviewerTile({
             )}
           </div>
 
-          <div className="text-xs sm:text-[13px] leading-relaxed text-[#0f172a] max-h-20 sm:max-h-24 overflow-y-auto pr-1">
+          <div className="text-xs sm:text-[13px] leading-relaxed text-[#0f172a] max-h-24 sm:max-h-28 overflow-y-auto pr-1">
             {isThinking ? (
               <span className="text-[#64748b] italic">
                 Analyzing technical signals and calibrating follow-up probe...

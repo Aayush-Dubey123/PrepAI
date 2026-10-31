@@ -177,7 +177,7 @@ export default async function TechnicalPracticePage() {
   }
 
   return (
-    <div className="h-full w-full max-w-7xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between">
+    <div className="min-h-full h-auto lg:h-full w-full max-w-7xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-start lg:justify-between">
       {/* Header - Single line clean alignment without trailing wraps */}
       <div className="shrink-0 flex items-center justify-between border-b border-[#e2e8f0] pb-2.5">
         <div className="flex items-center gap-2.5 shrink-0">
@@ -224,7 +224,7 @@ export default async function TechnicalPracticePage() {
       )}
 
       {/* 3-Column Responsive Grid of Drills - Equal Height Grid Rows */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 lg:grid-rows-2 gap-3 sm:gap-3.5 lg:gap-4 flex-1 my-2 min-h-0 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 lg:grid-rows-2 gap-3 sm:gap-3.5 lg:gap-4 flex-1 my-2 lg:min-h-0 items-stretch">
         {allDrills.map((drill) => {
           const stats = statsMap.get(drill.id);
           const masteryPct = masteryMap.get(drill.id) ?? 0;

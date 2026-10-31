@@ -25,7 +25,7 @@ export function MicCheck({
 
   return (
     <div className="rounded-2xl border border-[#e2e8f0] bg-white p-2.5 sm:p-3 space-y-2 shadow-xs">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-[#eef2ff] border border-[#e0e7ff] flex items-center justify-center text-[#4f46e5] shrink-0">
             <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -36,7 +36,7 @@ export function MicCheck({
           </div>
         </div>
 
-        <Badge variant={isGranted && (isMicOn || hasAudioActivity) ? "success" : "neutral"}>
+        <Badge variant={isGranted && (isMicOn || hasAudioActivity) ? "success" : "neutral"} className="shrink-0">
           {isGranted && hasAudioActivity ? (
             <span className="flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -62,12 +62,12 @@ export function MicCheck({
         />
       </div>
 
-      <div className="flex items-center justify-between pt-0.5">
+      <div className="flex items-center justify-between gap-2 pt-0.5">
         <Button
           variant={isMicOn ? "secondary" : "outline"}
           size="sm"
           onClick={onToggleMic}
-          className="text-xs gap-1.5 h-8"
+          className="text-xs gap-1.5 h-9 sm:h-8"
         >
           {isMicOn ? (
             <>

@@ -13,7 +13,7 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <main className="relative h-[calc(100dvh-3.5rem)] w-full flex flex-col justify-between items-center overflow-hidden bg-[#f4f6fa] text-[#0f172a] px-4 py-6 sm:py-8 selection:bg-indigo-500 selection:text-white select-none">
+    <main className="relative min-h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem)] w-full flex flex-col justify-between items-center overflow-y-auto md:overflow-hidden bg-[#f4f6fa] text-[#0f172a] px-4 py-6 sm:py-8 selection:bg-indigo-500 selection:text-white select-none">
       {/* Background WebGL Shader Orb */}
       <div className="absolute inset-0 z-0 w-full h-full pointer-events-none opacity-40">
         <Orb
@@ -38,7 +38,7 @@ export default function Home() {
 
       {/* Center Hero Section */}
       <div className="relative z-10 flex flex-col items-center justify-center text-center max-w-2xl mx-auto space-y-4 my-auto">
-        <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-[#0f172a]">
+        <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-[#0f172a]">
           Prep<span className="text-[#4f46e5]">AI</span>
         </h1>
 

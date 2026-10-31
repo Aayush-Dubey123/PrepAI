@@ -142,27 +142,27 @@ export function CookieConsent() {
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <button
             onClick={() => setShowSettings((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-[#64748b] hover:text-[#0f172a] bg-[#f8fafc] border border-[#e2e8f0] hover:bg-[#f1f5f9] transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl text-xs font-semibold text-[#64748b] hover:text-[#0f172a] bg-[#f8fafc] border border-[#e2e8f0] hover:bg-[#f1f5f9] transition-all cursor-pointer"
           >
             <Settings size={13} />
             <span>{showSettings ? "Back" : "Preferences"}</span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-end">
             {!showSettings && (
               <button
                 onClick={handleAcceptEssential}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#334155] hover:text-[#0f172a] bg-white border border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer"
+                className="px-3 py-2 sm:py-1.5 rounded-xl text-xs font-semibold text-[#334155] hover:text-[#0f172a] bg-white border border-[#cbd5e1] hover:bg-[#f8fafc] transition-all cursor-pointer"
               >
                 Essential Only
               </button>
             )}
             <button
               onClick={showSettings ? () => saveConsent(preferences) : handleAcceptAll}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-[#1e293b] hover:bg-[#0f172a] transition-all shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 sm:py-1.5 rounded-xl text-xs font-semibold text-white bg-[#1e293b] hover:bg-[#0f172a] transition-all shadow-xs cursor-pointer"
             >
               <Check size={14} />
               <span>{showSettings ? "Save Preferences" : "Accept All"}</span>

@@ -373,7 +373,7 @@ function QuestionPlayer() {
     const isPassing = score >= 70;
 
     return (
-      <div className="h-full w-full max-w-5xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between overflow-hidden">
+      <div className="min-h-full h-auto lg:h-full w-full max-w-5xl mx-auto p-3 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-start lg:justify-between overflow-visible lg:overflow-hidden">
         <div className="flex items-center justify-between">
           <Link
             href={`/practice/${drillSlug}`}
@@ -521,7 +521,7 @@ function QuestionPlayer() {
   const progressPercent = Math.round(((currentIdx + 1) / total) * 100);
 
   return (
-    <div className="h-full w-full max-w-5xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between overflow-hidden">
+    <div className="min-h-full h-auto lg:h-full w-full max-w-5xl mx-auto p-3 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-start lg:justify-between overflow-visible lg:overflow-hidden">
       {/* Top Header Bar */}
       <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-[#e2e8f0]">
         <div className="flex items-center gap-3">

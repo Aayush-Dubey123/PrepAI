@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useWebcamStream } from "@/src/hooks/useWebcamStream";
 import { useAudioPlayback } from "@/src/hooks/useAudioPlayback";
@@ -122,6 +122,23 @@ export default function InterviewStagePage() {
     turnState: orchestrator.turnState,
     onTerminate: handleIntegrityTerminate,
   });
+  // Auto-unmute when AI finishes speaking and hands turn to user
+  const prevTurnStateRef = useRef(orchestrator.turnState);
+  useEffect(() => {
+    const prevState = prevTurnStateRef.current;
+    prevTurnStateRef.current = orchestrator.turnState;
+
+    if (
+      orchestrator.turnState === "user_turn" &&
+      prevState === "ai_speaking" &&
+      supportsSpeechRecognition &&
+      !isListening
+    ) {
+      console.log("[STAGE] AI finished speaking -> Auto-unmuting candidate mic");
+      startListening();
+    }
+  }, [orchestrator.turnState, supportsSpeechRecognition, isListening, startListening]);
+
 
   // Controls Handlers
   const handleToggleMic = () => {
@@ -207,8 +224,8 @@ export default function InterviewStagePage() {
       />
 
       {/* 3. Main Stage: Twin Tile Layout */}
-      <main className="flex-1 min-h-0 p-3 sm:p-6 flex flex-col justify-between overflow-hidden">
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch min-h-0 mb-4">
+      <main className="flex-1 min-h-0 p-2.5 sm:p-4 md:p-6 flex flex-col md:justify-between overflow-y-auto md:overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 items-stretch md:min-h-0 mb-3 md:mb-4">
           {/* Left Tile: AI Interviewer */}
           <InterviewerTile
             turnState={orchestrator.turnState}
@@ -230,7 +247,7 @@ export default function InterviewStagePage() {
         </div>
 
         {/* 4. Bottom Controls Dock */}
-        <div className="shrink-0 z-20">
+        <div className="sticky bottom-0 z-30 shrink-0 bg-[#f4f6fa]/95 md:bg-white/80 backdrop-blur-md py-1.5 md:py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] -mx-2.5 px-2.5 sm:-mx-4 sm:px-4 md:mx-0 md:px-0">
           <InterviewControls
             isListening={isListening}
             isCameraOn={isCameraOn}

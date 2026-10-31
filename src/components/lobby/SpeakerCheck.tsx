@@ -53,7 +53,7 @@ export function SpeakerCheck({ onConfirmed, isConfirmed }: SpeakerCheckProps) {
 
   return (
     <div className="rounded-2xl border border-[#e2e8f0] bg-white p-2.5 sm:p-3 space-y-2 shadow-xs">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-[#f0f9ff] border border-[#e0f2fe] flex items-center justify-center text-[#0284c7] shrink-0">
             <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -64,7 +64,7 @@ export function SpeakerCheck({ onConfirmed, isConfirmed }: SpeakerCheckProps) {
           </div>
         </div>
 
-        <Badge variant={isConfirmed ? "success" : "neutral"}>
+        <Badge variant={isConfirmed ? "success" : "neutral"} className="shrink-0">
           {isConfirmed ? (
             <span className="flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -82,7 +82,7 @@ export function SpeakerCheck({ onConfirmed, isConfirmed }: SpeakerCheckProps) {
           size="sm"
           onClick={playTestAudio}
           isLoading={isPlaying}
-          className="text-xs gap-1.5 h-8"
+          className="text-xs gap-1.5 h-9 sm:h-8"
         >
           <Play className="w-3.5 h-3.5 text-[#0284c7]" />
           <span>Play Test Audio</span>
@@ -92,7 +92,7 @@ export function SpeakerCheck({ onConfirmed, isConfirmed }: SpeakerCheckProps) {
           <button
             type="button"
             onClick={onConfirmed}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-all cursor-pointer shadow-xs active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-1 h-9 sm:h-8 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-all cursor-pointer shadow-xs active:scale-95"
           >
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
             <span>Sound is clear</span>

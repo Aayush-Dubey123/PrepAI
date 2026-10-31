@@ -335,8 +335,8 @@ export default function InterviewLobbyPage() {
   };
 
   return (
-    <main className="h-[calc(100dvh-3.5rem)] bg-[#f4f6fa] text-[#0f172a] p-2.5 sm:p-3 md:p-4 flex flex-col justify-between overflow-y-auto relative select-none">
-      <div className="relative z-10 max-w-5xl xl:max-w-6xl mx-auto w-full flex-1 flex flex-col justify-between gap-2 sm:gap-2.5 min-h-0">
+    <main className="min-h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem)] bg-[#f4f6fa] text-[#0f172a] p-2.5 sm:p-3 md:p-4 flex flex-col justify-start md:justify-between overflow-y-auto relative select-none">
+      <div className="relative z-10 max-w-5xl xl:max-w-6xl mx-auto w-full flex-1 flex flex-col justify-start md:justify-between gap-3 sm:gap-2.5 md:min-h-0">
         {/* Header Ribbon */}
         <div className="text-center sm:text-left space-y-0.5 shrink-0">
           <div className="inline-flex items-center gap-1.5 rounded-full border border-[#c7d2fe] bg-[#e0e7ff] px-2.5 py-0.5 text-[11px] font-mono text-[#4338ca]">
@@ -359,9 +359,9 @@ export default function InterviewLobbyPage() {
         )}
 
         {/* Asymmetric 2-Column Hardware Verification Section */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 min-h-0 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:flex-1 md:min-h-0 items-stretch">
           {/* Left Column: 3 Audio & Voice Checks Stacked */}
-          <div className="md:col-span-5 lg:col-span-5 flex flex-col gap-2 sm:gap-2.5 justify-between min-h-0">
+          <div className="md:col-span-5 lg:col-span-5 flex flex-col gap-2.5 sm:gap-2.5 justify-start md:justify-between md:min-h-0">
             <MicCheck
               isMicOn={isMicOn}
               audioLevel={audioLevel}
@@ -381,7 +381,7 @@ export default function InterviewLobbyPage() {
           </div>
 
           {/* Right Column: Camera & Face Alignment Card (Spans Full Height) */}
-          <div className="md:col-span-7 lg:col-span-7 flex flex-col min-h-0">
+          <div className="md:col-span-7 lg:col-span-7 flex flex-col md:min-h-0">
             <CameraCalibrationCheck
               videoRef={videoRef}
               canvasRef={canvasRef}

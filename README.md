@@ -247,3 +247,4 @@ interview-ai/
 ├── package.json                            # Dependencies and scripts
 └── README.md                               # Project documentation
 ```
+omp --resume 01a18fc2-d5a1-778c-b118-e203cef2c17a

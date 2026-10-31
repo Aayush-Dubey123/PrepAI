@@ -313,7 +313,7 @@ export default function InterviewFeedbackPage() {
   const scorePercent = Math.min(100, Math.max(0, feedback.overallScore));
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] bg-[#f4f6fa] text-[#0f172a] font-sans flex flex-col justify-between overflow-hidden select-none">
+    <div className="min-h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem)] bg-[#f4f6fa] text-[#0f172a] font-sans flex flex-col justify-start md:justify-between overflow-y-auto md:overflow-hidden select-none">
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 h-12 shrink-0 bg-white/90 backdrop-blur-md border-b border-[#e2e8f0] px-4 sm:px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -376,7 +376,7 @@ export default function InterviewFeedbackPage() {
       </header>
 
       {/* Main Report Container - Viewport Fit with Scrollable Inner Content */}
-      <main className="flex-1 min-h-0 max-w-6xl w-full mx-auto p-3 sm:p-5 flex flex-col justify-between gap-3 overflow-hidden">
+      <main className="flex-1 min-h-0 max-w-6xl w-full mx-auto p-3 sm:p-5 flex flex-col justify-between gap-3 overflow-visible md:overflow-hidden">
         {/* Hero Score Card (Pinned Top) */}
         <section className="shrink-0 relative rounded-2xl border border-[#e2e8f0] bg-white p-4 sm:p-5 shadow-xs overflow-hidden">
           <div className="pointer-events-none absolute -right-12 -top-12 w-64 h-64 bg-[#e0e7ff]/40 rounded-full blur-3xl" />

@@ -77,6 +77,9 @@ export function useAudioPlayback({
     async (text: string, playbackId: number, onAudioStart?: () => void) => {
       const controller = new AbortController();
       abortControllerRef.current = controller;
+      const fetchTimeout = setTimeout(() => {
+        controller.abort();
+      }, 1500);
 
       let response: Response;
       try {
@@ -88,9 +91,11 @@ export function useAudioPlayback({
         });
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") {
-          return;
+          throw new Error("TTS fetch timed out (1.5s) — instant browser TTS fallback");
         }
         throw err;
+      } finally {
+        clearTimeout(fetchTimeout);
       }
 
       if (playbackIdRef.current !== playbackId) return;
@@ -123,6 +128,7 @@ export function useAudioPlayback({
           const cleanUpAndResolve = () => {
             if (isResolved) return;
             isResolved = true;
+            clearTimeout(chunkTimeout);
             currentChunkResolverRef.current = null;
             URL.revokeObjectURL(audioUrl);
             activeObjectUrlsRef.current.delete(audioUrl);
@@ -133,10 +139,12 @@ export function useAudioPlayback({
           };
 
           currentChunkResolverRef.current = cleanUpAndResolve;
+          const chunkTimeout = setTimeout(cleanUpAndResolve, 15000);
 
           audio.onended = cleanUpAndResolve;
           audio.onerror = cleanUpAndResolve;
-          audio.oncanplaythrough = () => {
+
+          const startPlay = () => {
             if (playbackIdRef.current === playbackId && activeAudioRef.current === audio) {
               if (chunkIdx === 0 && onAudioStart) {
                 onAudioStart();
@@ -147,6 +155,13 @@ export function useAudioPlayback({
               cleanUpAndResolve();
             }
           };
+
+          if (audio.readyState >= 3) {
+            startPlay();
+          } else {
+            audio.oncanplaythrough = startPlay;
+            audio.onloadeddata = startPlay;
+          }
         });
 
         chunkIdx++;
@@ -209,13 +224,27 @@ export function useAudioPlayback({
 
       await new Promise<void>((resolve) => {
         let isDone = false;
+        let resumeInterval: NodeJS.Timeout | null = null;
+        let safetyTimeout: NodeJS.Timeout | null = null;
+
         const finish = () => {
           if (!isDone) {
             isDone = true;
+            if (resumeInterval) clearInterval(resumeInterval);
+            if (safetyTimeout) clearTimeout(safetyTimeout);
             currentChunkResolverRef.current = null;
             resolve();
           }
         };
+
+        const maxDuration = Math.max(4000, text.length * 85);
+        safetyTimeout = setTimeout(finish, maxDuration);
+
+        resumeInterval = setInterval(() => {
+          if (!isDone && typeof window !== "undefined" && "speechSynthesis" in window) {
+            window.speechSynthesis.resume();
+          }
+        }, 3000);
 
         currentChunkResolverRef.current = () => {
           try {

@@ -348,16 +348,20 @@ export function useTurnOrchestrator({
         if (entries.length === 0) {
           const firstName =
             interview?.feedback?.candidateProfile?.fullName?.split(" ")[0] || "there";
-          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today. Before we begin, is there anything you'd like to check on your end — audio, video, anything like that?`;
-          if (!hasPlayedInitialGreetingRef.current) {
-            hasPlayedInitialGreetingRef.current = true;
-            setTurnState("ai_speaking");
-            try {
-              await onAiSpeakRequested(defaultGreeting);
-            } finally {
-              setTurnState("user_turn");
-            }
-          } else {
+          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today. Let's get right into your technical interview.`;
+          hasPlayedInitialGreetingRef.current = true;
+          const entry: TranscriptEntry = {
+            id: `${Date.now()}`,
+            speaker: "ai",
+            text: defaultGreeting,
+            timestamp: new Date(),
+          };
+          setTranscript([entry]);
+          void appendTranscript(defaultGreeting, "ai");
+          setTurnState("ai_speaking");
+          try {
+            await onAiSpeakRequested(defaultGreeting);
+          } finally {
             setTurnState("user_turn");
           }
           return;

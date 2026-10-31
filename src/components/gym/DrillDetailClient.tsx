@@ -119,7 +119,7 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
   };
 
   return (
-    <div className="h-full w-full max-w-7xl mx-auto p-4 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-between overflow-hidden">
+    <div className="min-h-full h-auto lg:h-full w-full max-w-7xl mx-auto p-3 sm:p-5 lg:px-6 lg:py-4 flex flex-col justify-start lg:justify-between overflow-visible lg:overflow-hidden">
       {/* Top Drill Hero Banner — Compact, high-density, single-line alignment */}
       <div className={`shrink-0 rounded-2xl p-3.5 sm:p-4 bg-gradient-to-r ${drill.color} border border-inherit/40 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3`}>
         <div className="space-y-1 min-w-0">
@@ -164,9 +164,9 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
       </div>
 
       {/* Two-Column Equal-Height Balanced Cockpit Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0 items-stretch my-2.5 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 lg:min-h-0 items-stretch my-2.5 overflow-visible lg:overflow-hidden">
         {/* Left Column: SESSION CONFIGURATION & CURATED SETS */}
-        <div className="h-full flex flex-col min-h-0 overflow-hidden bg-white rounded-2xl border border-[#e2e8f0] p-4 sm:p-4.5 shadow-2xs">
+        <div className="h-auto lg:h-full flex flex-col lg:min-h-0 overflow-visible lg:overflow-hidden bg-white rounded-2xl border border-[#e2e8f0] p-4 sm:p-4.5 shadow-2xs">
           {/* Column Header */}
           <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-[#f1f5f9] mb-2.5">
             <div className="flex items-center gap-2">
@@ -312,7 +312,7 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
         </div>
 
         {/* Right Column: DRILL MASTERY & SESSION HISTORY */}
-        <div className="h-full flex flex-col min-h-0 overflow-hidden bg-white rounded-2xl border border-[#e2e8f0] p-4 sm:p-4.5 shadow-2xs">
+        <div className="h-auto lg:h-full flex flex-col lg:min-h-0 overflow-visible lg:overflow-hidden bg-white rounded-2xl border border-[#e2e8f0] p-4 sm:p-4.5 shadow-2xs">
           {/* Column Header */}
           <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-[#f1f5f9] mb-2.5">
             <div className="flex items-center gap-2">
@@ -361,8 +361,8 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
                   </p>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-[#e2e8f0]">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto rounded-xl border border-[#e2e8f0]">
+                  <table className="w-full min-w-[420px] text-left text-xs">
                     <thead className="bg-[#f8fafc] text-[#64748b] border-b border-[#e2e8f0] text-[10px]">
                       <tr>
                         <th className="py-2 px-3 font-semibold">Date</th>

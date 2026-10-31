@@ -32,8 +32,8 @@ export function CameraCalibrationCheck({
   calibrationFeedback,
 }: CameraCalibrationCheckProps) {
   return (
-    <div className="rounded-2xl border border-[#e2e8f0] bg-white p-3 sm:p-3.5 flex flex-col justify-between shadow-xs h-full gap-2.5">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="rounded-2xl border border-[#e2e8f0] bg-white p-3 sm:p-3.5 flex flex-col justify-between shadow-xs h-auto md:h-full gap-2.5">
+      <div className="flex flex-wrap items-start sm:items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-[#eef2ff] border border-[#e0e7ff] flex items-center justify-center text-[#4f46e5]">
             <Camera className="w-4 h-4" />
@@ -59,7 +59,7 @@ export function CameraCalibrationCheck({
       </div>
 
       {/* Video Preview Frame (Expanded Height) */}
-      <div className="relative flex-1 min-h-[220px] sm:min-h-[250px] md:min-h-[280px] w-full rounded-xl overflow-hidden bg-slate-900 border border-[#e2e8f0] shadow-inner flex items-center justify-center">
+      <div className="relative flex-1 min-h-[190px] sm:min-h-[240px] md:min-h-[280px] aspect-[4/3] sm:aspect-auto w-full rounded-xl overflow-hidden bg-slate-900 border border-[#e2e8f0] shadow-inner flex items-center justify-center">
         <video
           ref={videoRef}
           autoPlay
@@ -79,7 +79,7 @@ export function CameraCalibrationCheck({
         {/* Centering Oval Guide */}
         {isCameraOn && (
           <div
-            className={`pointer-events-none absolute inset-0 flex items-center justify-center border-2 border-dashed rounded-full max-w-[170px] max-h-[210px] mx-auto my-auto transition-colors ${
+            className={`pointer-events-none absolute inset-0 flex items-center justify-center border-2 border-dashed rounded-full max-w-[130px] max-h-[165px] sm:max-w-[170px] sm:max-h-[210px] mx-auto my-auto transition-colors ${
               isCalibrated
                 ? "border-emerald-500/70 bg-emerald-500/[0.05]"
                 : isCalibrating
@@ -129,7 +129,7 @@ export function CameraCalibrationCheck({
           variant={isCameraOn ? "secondary" : "outline"}
           size="sm"
           onClick={onToggleCamera}
-          className="text-xs gap-1.5"
+          className="text-xs gap-1.5 h-9 sm:h-8"
         >
           {isCameraOn ? (
             <>
@@ -150,7 +150,7 @@ export function CameraCalibrationCheck({
             size="sm"
             onClick={onRunCalibration}
             isLoading={isCalibrating}
-            className="text-xs gap-1.5 font-medium"
+            className="text-xs gap-1.5 font-medium h-9 sm:h-8"
           >
             {isCalibrated ? (
               <>

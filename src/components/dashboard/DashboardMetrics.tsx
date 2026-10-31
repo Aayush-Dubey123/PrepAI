@@ -58,7 +58,7 @@ export function DashboardMetrics({ interviews }: DashboardMetricsProps) {
   const topRole = interviews[0]?.jobRole || "Software Developer";
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
       {/* 1. Interviews Completed */}
       <Card className="relative overflow-hidden bg-white border border-[#e2e8f0] shadow-xs">
         <CardContent className="p-3.5 flex items-center justify-between">

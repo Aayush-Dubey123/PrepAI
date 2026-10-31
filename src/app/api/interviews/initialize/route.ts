@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     const greeting =
       `Hi ${firstName}, welcome! I'm glad you could make it today. ` +
-      `Before we begin, is there anything you'd like to check on your end — audio, video, anything like that?`;
+      `Let's get right into your technical interview: to start, could you walk me through an impactful architecture contribution you recently made as a ${body.jobRole}?`;
 
     // ── Bootstrap ConversationState ──────────────────────────────────────────
     // Assign a random seed (0-999) for this interview. Never changes after creation.

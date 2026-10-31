@@ -25,7 +25,7 @@ export function CandidateTile({
   const [isMirrored, setIsMirrored] = useState(true);
 
   return (
-    <div className="relative h-full w-full rounded-2xl border border-[#e2e8f0] bg-slate-900 overflow-hidden flex flex-col items-center justify-center shadow-sm group">
+    <div className="relative min-h-[220px] md:min-h-0 aspect-video md:aspect-auto h-auto md:h-full w-full rounded-2xl border border-[#e2e8f0] bg-slate-900 overflow-hidden flex flex-col items-center justify-center shadow-sm group">
       {/* Video element - keeps stream active regardless of isCameraOn */}
       <video
         ref={videoRef}

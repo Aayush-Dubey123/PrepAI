@@ -301,20 +301,20 @@ export default function CandidateAnalyticsPage() {
       : null;
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-[#f4f6fa] text-[#0f172a] select-none">
+    <div className="min-h-[calc(100dvh-3.5rem)] md:h-screen w-full md:w-screen overflow-y-auto md:overflow-hidden flex flex-col md:flex-row bg-[#f4f6fa] text-[#0f172a] select-none">
       {/* 1. Left Navigation */}
       <AppSidebar />
 
       {/* 2. Main Viewport */}
-      <main className="flex-1 min-w-0 h-screen overflow-y-auto p-4 sm:p-5 space-y-4">
+      <main className="flex-1 min-w-0 min-h-[calc(100dvh-3.5rem)] md:h-screen overflow-y-auto p-3 sm:p-4 md:p-5 space-y-4">
         {/* Top Header Bar */}
         <div className="shrink-0 flex flex-col md:flex-row md:items-center justify-between border-b border-[#e2e8f0] pb-2.5 gap-2.5">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#0f172a]">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <h1 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-[#0f172a]">
                 Feedback Diagnostic & Technical Practice
               </h1>
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf4ff] text-[#a21caf] border border-[#f5d0fe]">
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#fdf4ff] text-[#a21caf] border border-[#f5d0fe]">
                 <Sparkles className="w-3 h-3 text-[#c026d3]" />
                 Targeted AI Training Lab
               </span>

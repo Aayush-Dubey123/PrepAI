@@ -94,7 +94,7 @@ export function Header() {
 
         {showExitConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-            <div className="relative w-full max-w-md bg-white border border-[#e2e8f0] rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto bg-white border border-[#e2e8f0] rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4">
               <h3 className="text-lg font-bold text-[#0f172a]">Exit Calibration?</h3>
               <p className="text-xs text-[#64748b] leading-relaxed">
                 Are you sure you want to exit? Your session is saved and you can return to it anytime from your dashboard.
@@ -143,13 +143,13 @@ export function Header() {
           <ChevronRight className="w-3.5 h-3.5 text-[#cbd5e1] shrink-0" />
 
           {/* Interactive Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium">
+          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium min-w-0">
             <Link
               href="/dashboard"
               className={
                 pathname === "/dashboard"
                   ? "text-[#0f172a] font-bold"
-                  : "text-[#64748b] hover:text-[#0f172a] transition-colors"
+                  : "hidden sm:inline text-[#64748b] hover:text-[#0f172a] transition-colors"
               }
             >
               Dashboard
@@ -157,33 +157,33 @@ export function Header() {
 
             {isFeedback && interviewId && (
               <>
-                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
-                <span className="text-[#64748b] font-mono text-xs">
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1] hidden sm:inline" />
+                <span className="text-[#64748b] font-mono text-xs hidden md:inline">
                   #{interviewId.slice(0, 8)}
                 </span>
-                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
-                <span className="text-[#4f46e5] font-semibold">Evaluation</span>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1] hidden sm:inline" />
+                <span className="text-[#4f46e5] font-semibold truncate max-w-[120px] sm:max-w-none">Evaluation</span>
               </>
             )}
 
             {pathname === "/analytics" && (
               <>
-                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
-                <span className="text-[#4f46e5] font-semibold">Performance Analytics</span>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1] hidden sm:inline" />
+                <span className="text-[#4f46e5] font-semibold truncate max-w-[140px] sm:max-w-none">Performance Analytics</span>
               </>
             )}
 
             {pathname === "/admin" && (
               <>
-                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
-                <span className="text-[#4f46e5] font-semibold">Admin Telemetry</span>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1] hidden sm:inline" />
+                <span className="text-[#4f46e5] font-semibold truncate max-w-[140px] sm:max-w-none">Admin Telemetry</span>
               </>
             )}
 
             {pathname.startsWith("/practice") && (
               <>
-                <ChevronRight className="w-3 h-3 text-[#cbd5e1]" />
-                <span className="text-[#4f46e5] font-semibold">Technical Practice</span>
+                <ChevronRight className="w-3 h-3 text-[#cbd5e1] hidden sm:inline" />
+                <span className="text-[#4f46e5] font-semibold truncate max-w-[140px] sm:max-w-none">Technical Practice</span>
               </>
             )}
           </div>
@@ -292,7 +292,7 @@ export function Header() {
           onClick={() => setShowAbout(false)}
         >
           <div
-            className="relative w-full max-w-lg bg-white rounded-2xl p-6 border border-[#e2e8f0] text-[#0f172a] shadow-2xl space-y-4"
+            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white rounded-2xl p-4 sm:p-6 border border-[#e2e8f0] text-[#0f172a] shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
@@ -317,7 +317,7 @@ export function Header() {
               It conducts dynamic code evaluations, real-time voice & text technical dialogue, and instant candidate feedback loops.
             </p>
 
-            <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs">
               <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-1">
                 <div className="font-bold text-[#0f172a]">Adaptive Probing</div>
                 <div className="text-[#64748b] text-[11px]">Contextual multi-turn depth scaling.</div>

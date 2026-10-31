@@ -260,7 +260,7 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
   };
 
   return (
-    <Card className="h-full flex flex-col justify-between overflow-hidden p-4 sm:p-5 bg-white border border-[#e2e8f0] shadow-xs">
+    <Card className="h-auto lg:h-full min-h-[380px] lg:min-h-0 flex flex-col justify-between overflow-hidden p-4 sm:p-5 bg-white border border-[#e2e8f0] shadow-xs">
       {/* Tab Switcher & Step Indicator (Matching Image #1) */}
       <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] pb-3">
         <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-xl border border-[#e2e8f0]">
@@ -341,7 +341,7 @@ export function ResumeUploadFlow({ onSuccess }: ResumeUploadFlowProps) {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all cursor-pointer ${
+              className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-4 sm:p-6 text-center transition-all cursor-pointer ${
                 isDragOver
                   ? "border-[#4f46e5] bg-[#eef2ff]/50 scale-[1.01]"
                   : "border-[#cbd5e1] bg-[#f8fafc]/70 hover:border-[#6366f1] hover:bg-[#f1f5f9]/80"

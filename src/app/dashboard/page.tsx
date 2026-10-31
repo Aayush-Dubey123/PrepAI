@@ -42,19 +42,19 @@ export default function Dashboard() {
   }, [showNotifications]);
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-[#f4f6fa] text-[#0f172a] select-none">
+    <div className="min-h-[calc(100dvh-3.5rem)] md:h-screen w-full md:w-screen overflow-y-auto md:overflow-hidden flex flex-col md:flex-row bg-[#f4f6fa] text-[#0f172a] select-none">
       {/* 1. Fixed Left Sidebar */}
       <AppSidebar />
 
       {/* 2. Main Dashboard Content */}
-      <main className="flex-1 min-w-0 h-screen overflow-hidden flex flex-col justify-between p-4 sm:p-6 gap-3">
+      <main className="flex-1 min-w-0 min-h-[calc(100dvh-3.5rem)] md:h-screen overflow-y-auto md:overflow-hidden flex flex-col justify-start md:justify-between p-3 sm:p-4 md:p-6 gap-3">
         {/* Top Header Bar */}
         <div className="shrink-0 flex items-center justify-between border-b border-[#e2e8f0] pb-3">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#0f172a]">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-[#0f172a]">
               Technical Assessment Portal
             </h1>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#e0e7ff] text-[#4338ca] border border-[#c7d2fe]">
+            <span className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#e0e7ff] text-[#4338ca] border border-[#c7d2fe]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#4f46e5]" />
               Candidate Cockpit
             </span>
@@ -91,7 +91,7 @@ export default function Dashboard() {
                 </button>
 
                 {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-xs sm:w-80 bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                     <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-2.5 mb-2.5">
                       <div className="flex items-center gap-1.5 font-bold text-xs text-[#0f172a]">
                         <Bell className="w-3.5 h-3.5 text-[#4f46e5]" />
@@ -146,9 +146,9 @@ export default function Dashboard() {
         </div>
 
         {/* Two-Column Equal-Height Containers from Image #1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0 items-stretch overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 lg:min-h-0 items-stretch overflow-visible lg:overflow-hidden">
           {/* Left Container: LAUNCH NEW SESSION */}
-          <div className="h-full flex flex-col min-h-0 overflow-hidden">
+          <div className="h-auto lg:h-full flex flex-col lg:min-h-0 overflow-visible lg:overflow-hidden">
             <div className="shrink-0 flex items-center justify-between px-1 mb-1.5">
               <h2 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider font-mono">
                 LAUNCH NEW SESSION
@@ -161,7 +161,7 @@ export default function Dashboard() {
           </div>
 
           {/* Right Container: RECENT EVALUATIONS */}
-          <div className="h-full flex flex-col min-h-0 overflow-hidden">
+          <div className="h-auto lg:h-full flex flex-col lg:min-h-0 overflow-visible lg:overflow-hidden">
             <div className="shrink-0 flex items-center justify-between px-1 mb-1.5">
               <h2 className="text-xs font-bold text-[#0f172a] uppercase tracking-wider font-mono">
                 RECENT EVALUATIONS

@@ -69,7 +69,7 @@ export function TabsList({
     <div
       role="tablist"
       className={cn(
-        "inline-flex h-10 items-center justify-center rounded-xl bg-[#f1f5f9] p-1 text-[#64748b] border border-[#e2e8f0]",
+        "inline-flex h-10 max-w-full overflow-x-auto items-center justify-start sm:justify-center rounded-xl bg-[#f1f5f9] p-1 text-[#64748b] border border-[#e2e8f0] scrollbar-none",
         className
       )}
       {...props}

@@ -47,12 +47,12 @@ export default function AdminLoginPage() {
   const candidateEmail = user?.primaryEmailAddress?.emailAddress || "Candidate Account";
 
   return (
-    <div className="min-h-screen w-screen flex flex-col justify-between bg-[#f4f6fa] text-[#0f172a] select-none relative overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col justify-between bg-[#f4f6fa] text-[#0f172a] select-none relative overflow-hidden">
       {/* Background Glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-indigo-500/10 blur-[120px] pointer-events-none rounded-full" />
 
       {/* Top Header */}
-      <header className="w-full h-16 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-md px-6 flex items-center justify-between z-10">
+      <header className="w-full h-16 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-10">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-xl bg-[#eef2ff] border border-[#c7d2fe] flex items-center justify-center text-[#4f46e5] transition-transform group-hover:scale-105">
             <Brain className="w-4 h-4" />
@@ -65,7 +65,8 @@ export default function AdminLoginPage() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
             <Lock className="w-3.5 h-3.5 text-slate-500" />
-            Staff Authorization Portal
+            <span className="hidden sm:inline">Staff Authorization Portal</span>
+            <span className="sm:hidden">Staff Only</span>
           </span>
         </div>
       </header>
