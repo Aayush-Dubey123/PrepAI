@@ -218,6 +218,23 @@ export default function InterviewStagePage() {
         onToggleFullscreen={handleToggleFullscreen}
       />
 
+      {/* Fullscreen Focus Prompt Bar (if entered without fullscreen) */}
+      {!isFullscreen && isFullscreenSupported && (
+        <div className="bg-[#4f46e5] text-white px-3 sm:px-6 py-2 text-xs flex items-center justify-between z-30 shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Proctored Session:</span>
+            <span className="hidden sm:inline">Please remain in fullscreen mode for continuous proctoring focus.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleFullscreen}
+            className="px-2.5 py-1 rounded-md bg-white text-[#4f46e5] font-semibold text-xs hover:bg-indigo-50 transition-colors cursor-pointer shadow-xs"
+          >
+            Enter Fullscreen
+          </button>
+        </div>
+      )}
+
       {/* 2. Integrity Strike & Guidance Banner */}
       <IntegrityAlertBanner
         warning={warning}

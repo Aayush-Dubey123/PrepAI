@@ -326,11 +326,25 @@ export default function InterviewLobbyPage() {
     (!isResearchMode || researchConsent) &&
     completedChecksCount >= 2; // generous minimum for accessibility, with full readiness highlighted
 
-  const handleEnterStage = () => {
+  const handleEnterStage = async () => {
+    try {
+      if (typeof document !== "undefined" && !document.fullscreenElement && document.fullscreenEnabled) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.warn("[LOBBY] Fullscreen entry blocked or rejected:", err);
+    }
     router.push(`/interview/${interviewId}`);
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    try {
+      if (typeof document !== "undefined" && !document.fullscreenElement && document.fullscreenEnabled) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.warn("[LOBBY] Fullscreen entry blocked or rejected:", err);
+    }
     router.push(`/interview/${interviewId}`);
   };
 

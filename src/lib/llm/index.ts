@@ -185,68 +185,127 @@ async function generateWithHedging(
   // Re-order remaining models so first hedge is a DIFFERENT provider than primary
   const diffProviderHedge = availableModels.slice(1).find((m) => m.provider !== primary.provider);
   const remaining = availableModels.slice(1).filter((m) => m !== diffProviderHedge);
-  const hedgeModels = diffProviderHedge ? [diffProviderHedge, ...remaining] : availableModels.slice(1);
+  const orderedModels: ModelConfig[] = [
+    primary,
+    ...(diffProviderHedge ? [diffProviderHedge, ...remaining] : availableModels.slice(1)),
+  ];
 
   return new Promise<GenerateResult>((resolve, reject) => {
     let settled = false;
+    let nextIndexToDispatch = 0;
+    let activeDispatches = 0;
+    let hedgeTimer: NodeJS.Timeout | null = null;
+    let masterTimer: NodeJS.Timeout | null = null;
+
+    function cleanup() {
+      if (hedgeTimer) {
+        clearTimeout(hedgeTimer);
+        hedgeTimer = null;
+      }
+      if (masterTimer) {
+        clearTimeout(masterTimer);
+        masterTimer = null;
+      }
+    }
 
     function settle(result: GenerateResult) {
       if (settled) return;
       settled = true;
+      cleanup();
       resolve(result);
     }
 
-    function fail(err: Error) {
+    function failAll(err: Error) {
       if (settled) return;
-      if (attempts.filter((a) => a.outcome === "error").length >= availableModels.length) {
-        reject(err);
-      }
+      settled = true;
+      cleanup();
+      reject(err);
     }
 
-    // Fire primary
-    const pStart = Date.now();
-    callModel(primary, opts, timeoutMs)
-      .then((r) => {
-        attempts.push({ provider: primary.provider, model: primary.id, outcome: "success", latencyMs: Date.now() - pStart });
-        settle(r);
-      })
-      .catch((e) => {
-        attempts.push({ provider: primary.provider, model: primary.id, outcome: "error", latencyMs: Date.now() - pStart, error: e?.message });
-        fail(e);
-        // On primary failure, fire first hedge immediately if available
-        if (!settled && hedgeModels.length > 0) {
-          const hedge = hedgeModels[0];
-          const hStart = Date.now();
-          callModel(hedge, opts, timeoutMs)
-            .then((r) => {
-              attempts.push({ provider: hedge.provider, model: hedge.id, outcome: "success", latencyMs: Date.now() - hStart });
-              settle(r);
-            })
-            .catch((he) => {
-              attempts.push({ provider: hedge.provider, model: hedge.id, outcome: "error", latencyMs: Date.now() - hStart, error: he?.message });
-              fail(he);
-            });
-        }
-      });
+    function dispatchNext(): boolean {
+      if (settled || nextIndexToDispatch >= orderedModels.length) {
+        return false;
+      }
+      const model = orderedModels[nextIndexToDispatch++];
+      activeDispatches++;
+      const mStart = Date.now();
 
-    // Hedging timer: fire cross-provider hedge after HEDGE_FIRE_MS if primary slow
-    if (hedgeModels.length > 0) {
-      setTimeout(() => {
-        if (settled) return;
-        const hedge = hedgeModels[0];
-        console.log(`[LLM] Hedging: firing ${hedge.provider}/${hedge.id} after ${HEDGE_FIRE_MS}ms (cross-provider race)`);
-        const hStart = Date.now();
-        callModel(hedge, opts, timeoutMs)
-          .then((r) => {
-            attempts.push({ provider: hedge.provider, model: hedge.id, outcome: "success", latencyMs: Date.now() - hStart });
-            settle(r);
-          })
-          .catch((he) => {
-            attempts.push({ provider: hedge.provider, model: hedge.id, outcome: "error", latencyMs: Date.now() - hStart, error: he?.message });
-            fail(he);
+      callModel(model, opts, timeoutMs)
+        .then(async (res) => {
+          if (settled) return;
+          // Validate JSON schema if required
+          if (opts.jsonSchema) {
+            const parsed = tryParseAndValidate(res.text, opts.jsonSchema);
+            if (!parsed.ok) {
+              const errMsg = `JSON validation failed for ${model.provider}/${model.id}: ${parsed.error}`;
+              console.warn(`[LLM] ${errMsg}`);
+              attempts.push({
+                provider: model.provider,
+                model: model.id,
+                outcome: "error",
+                latencyMs: Date.now() - mStart,
+                error: errMsg,
+              });
+              activeDispatches--;
+              // Cascade to next model
+              if (!dispatchNext() && activeDispatches === 0) {
+                failAll(new Error(errMsg));
+              }
+              return;
+            }
+          }
+
+          attempts.push({
+            provider: model.provider,
+            model: model.id,
+            outcome: "success",
+            latencyMs: Date.now() - mStart,
           });
+          settle(res);
+        })
+        .catch((err: unknown) => {
+          if (settled) return;
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.warn(`[LLM] Hedge attempt failed for ${model.provider}/${model.id} (${Date.now() - mStart}ms): ${errMsg}`);
+          attempts.push({
+            provider: model.provider,
+            model: model.id,
+            outcome: "error",
+            latencyMs: Date.now() - mStart,
+            error: errMsg,
+          });
+          activeDispatches--;
+
+          // Cascade to next model if available
+          if (!dispatchNext() && activeDispatches === 0) {
+            failAll(err instanceof Error ? err : new Error(errMsg));
+          }
+        });
+
+      return true;
+    }
+
+    // 1. Dispatch primary model at t = 0
+    dispatchNext();
+
+    // 2. Hedging timer: dispatch cross-provider hedge at HEDGE_FIRE_MS if primary still in flight
+    if (orderedModels.length > 1) {
+      hedgeTimer = setTimeout(() => {
+        if (!settled && nextIndexToDispatch < orderedModels.length) {
+          const nextModel = orderedModels[nextIndexToDispatch];
+          console.log(`[LLM] Hedging: firing ${nextModel.provider}/${nextModel.id} after ${HEDGE_FIRE_MS}ms (cross-provider race)`);
+          dispatchNext();
+        }
       }, HEDGE_FIRE_MS);
     }
+
+    // 3. Master safety deadline: abort after timeout budget to prevent any UI hang
+    const masterTimeoutMs = Math.max(timeoutMs * 2, 8000);
+    masterTimer = setTimeout(() => {
+      if (!settled) {
+        failAll(new Error(`[LLM] Master hedging timeout (${masterTimeoutMs}ms) exceeded.`));
+      }
+    }, masterTimeoutMs);
   });
 }
 
@@ -293,6 +352,7 @@ async function validateAndRetry(
     `[LLM] JSON schema validation failed after retry: ${retryParsed.error}`,
   );
 }
+
 export function tryParseAndValidate<T>(
   text: string,
   schema: z.ZodType<T>,

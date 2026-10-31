@@ -378,7 +378,8 @@ export function useTurnOrchestrator({
         if (entries.length === 0) {
           const firstName =
             interview?.feedback?.candidateProfile?.fullName?.split(" ")[0] || "there";
-          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today. Let's get right into your technical interview.`;
+          const role = interview?.jobRole || "Software Developer";
+          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today for your ${role} interview. To get started, could you briefly introduce yourself and share a bit about your technical background and recent projects?`;
           hasPlayedInitialGreetingRef.current = true;
           const entry: TranscriptEntry = {
             id: `${Date.now()}`,

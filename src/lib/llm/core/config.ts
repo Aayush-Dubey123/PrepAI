@@ -60,23 +60,26 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
 
 /** Fast models for live turns (orchestrator): Groq -> Gemini -> OpenRouter */
 export const LIVE_TURN_MODELS: ModelConfig[] = [
-  // Primary: Groq (ultra fast TTFT)
+  // Primary: Groq (ultra fast TTFT ~140-500ms)
   { id: "openai/gpt-oss-20b",                       provider: "groq",       contextTokens: 16384,   tps: 250, jsonMode: true },
-  // Hedge 1: Gemini (cross-provider race)
-  { id: "gemini-3.8-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
-  // Hedge 2: Groq alternative
+  // Fast Groq alternative (blazing fast ~140ms)
   { id: "qwen/qwen3.8-27b",                         provider: "groq",       contextTokens: 32768,   tps: 200, jsonMode: true },
-  // Fallback 1: Gemini fast lite
+  // Primary Gemini hedge (fast lite ~700ms, NO 503 high-demand spikes)
   { id: "gemini-3.5-flash-lite",                    provider: "gemini",     contextTokens: 1048576, tps: 200, jsonMode: true },
-  // Fallback 2: OpenRouter free tier (overflow)
+  // Secondary Gemini hedge
+  { id: "gemini-3.5-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
+  // Gemini 3.8 flash (subject to 503 high-demand spikes on free tier)
+  { id: "gemini-3.8-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
+  // Fallback: OpenRouter free tier (overflow)
   { id: "meta-llama/llama-3.3-70b-instruct:free",   provider: "openrouter", contextTokens: 16384,   tps: 80,  jsonMode: true },
 ];
 
 /** Heavy models for resume parse, plan, feedback: Gemini -> Groq -> OpenRouter */
 export const HEAVY_TASK_MODELS: ModelConfig[] = [
-  { id: "gemini-3.8-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
-  { id: "openai/gpt-oss-120b",                      provider: "groq",       contextTokens: 16384,   tps: 100, jsonMode: true },
   { id: "gemini-3.5-flash-lite",                    provider: "gemini",     contextTokens: 1048576, tps: 200, jsonMode: true },
+  { id: "gemini-3.5-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
+  { id: "openai/gpt-oss-120b",                      provider: "groq",       contextTokens: 16384,   tps: 100, jsonMode: true },
+  { id: "gemini-3.8-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
   { id: "meta-llama/llama-3.3-70b-instruct:free",   provider: "openrouter", contextTokens: 16384,   tps: 80,  jsonMode: true },
 ];
 
@@ -100,5 +103,6 @@ export const HEAVY_TIMEOUT_MS = 20000;
 /** Consecutive failures before opening the circuit */
 export const CB_FAILURE_THRESHOLD = 2;
 
-/** How long to keep a tripped circuit open (ms) */
-export const CB_OPEN_MS = 5 * 60 * 1000; // 5 minutes
+/** Time circuit stays open before half-open probe (ms) */
+export const CB_OPEN_MS = 300000; // 5 minutes
+export const CB_COOLDOWN_MS = CB_OPEN_MS;
