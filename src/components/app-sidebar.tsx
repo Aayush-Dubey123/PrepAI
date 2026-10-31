@@ -237,6 +237,7 @@ export function AppSidebar() {
           <nav className="space-y-1">
             <Link
               href="/dashboard"
+              prefetch={true}
               onClick={() => setIsMobileMenuOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
                 pathname === "/dashboard"
@@ -253,6 +254,7 @@ export function AppSidebar() {
             {isTechnicalPracticeEnabled() && (
               <Link
                 href="/practice"
+                prefetch={true}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
                   pathname.startsWith("/practice") || pathname.startsWith("/gym")
@@ -273,6 +275,7 @@ export function AppSidebar() {
 
             <Link
               href="/analytics"
+              prefetch={true}
               onClick={() => setIsMobileMenuOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
                 pathname.startsWith("/analytics")
@@ -352,6 +355,7 @@ export function AppSidebar() {
           <nav className="space-y-1">
             <Link
               href="/dashboard"
+              prefetch={true}
               className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                 pathname === "/dashboard"
                   ? "bg-[#e0e7ff] text-[#3730a3] font-semibold shadow-xs"
@@ -369,6 +373,7 @@ export function AppSidebar() {
             {isTechnicalPracticeEnabled() && (
               <Link
                 href="/practice"
+                prefetch={true}
                 className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                   pathname.startsWith("/practice") || pathname.startsWith("/gym")
                     ? "bg-[#e0e7ff] text-[#3730a3] font-semibold shadow-xs"
@@ -388,6 +393,7 @@ export function AppSidebar() {
 
             <Link
               href="/analytics"
+              prefetch={true}
               className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                 pathname.startsWith("/analytics")
                   ? "bg-[#e0e7ff] text-[#3730a3] font-semibold shadow-xs"

@@ -29,38 +29,38 @@ export default async function DrillDetailPage({
   }
   const drill = drillRows[0];
 
-  // 2. Fetch practice sets for this drill
-  const sets = await db
-    .select({
-      id: practiceSets.id,
-      title: practiceSets.title,
-      slug: practiceSets.slug,
-      level: practiceSets.level,
-      questionCount: sql<number>`cardinality(${practiceSets.questionIds})`,
-      sortOrder: practiceSets.sortOrder,
-    })
-    .from(practiceSets)
-    .where(eq(practiceSets.drillId, drill.id))
-    .orderBy(practiceSets.sortOrder, practiceSets.slug);
-
-  // 3. Fetch history for this user
-  const historyRows = await db
-    .select({
-      id: drillSessions.id,
-      status: drillSessions.status,
-      mode: drillSessions.mode,
-      level: drillSessions.level,
-      score: drillSessions.score,
-      startedAt: drillSessions.startedAt,
-      finishedAt: drillSessions.finishedAt,
-      questionCount: sql<number>`cardinality(${drillSessions.questionIds})`,
-      practiceSetTitle: practiceSets.title,
-    })
-    .from(drillSessions)
-    .leftJoin(practiceSets, eq(practiceSets.id, drillSessions.practiceSetId))
-    .where(and(eq(drillSessions.userId, userId), eq(drillSessions.drillId, drill.id)))
-    .orderBy(sql`${drillSessions.startedAt} DESC`)
-    .limit(10);
+  // 2 & 3. Fetch practice sets and user history in parallel
+  const [sets, historyRows] = await Promise.all([
+    db
+      .select({
+        id: practiceSets.id,
+        title: practiceSets.title,
+        slug: practiceSets.slug,
+        level: practiceSets.level,
+        questionCount: sql<number>`cardinality(${practiceSets.questionIds})`,
+        sortOrder: practiceSets.sortOrder,
+      })
+      .from(practiceSets)
+      .where(eq(practiceSets.drillId, drill.id))
+      .orderBy(practiceSets.sortOrder, practiceSets.slug),
+    db
+      .select({
+        id: drillSessions.id,
+        status: drillSessions.status,
+        mode: drillSessions.mode,
+        level: drillSessions.level,
+        score: drillSessions.score,
+        startedAt: drillSessions.startedAt,
+        finishedAt: drillSessions.finishedAt,
+        questionCount: sql<number>`cardinality(${drillSessions.questionIds})`,
+        practiceSetTitle: practiceSets.title,
+      })
+      .from(drillSessions)
+      .leftJoin(practiceSets, eq(practiceSets.id, drillSessions.practiceSetId))
+      .where(and(eq(drillSessions.userId, userId), eq(drillSessions.drillId, drill.id)))
+      .orderBy(sql`${drillSessions.startedAt} DESC`)
+      .limit(10),
+  ]);
 
   const formattedHistory = historyRows.map((h) => {
     let durationSeconds: number | null = null;

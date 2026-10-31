@@ -64,20 +64,55 @@ export default async function TechnicalPracticePage() {
   const conceptTagsMap = new Map<string, string[]>();
 
   try {
-    // 1. Fetch drills
-    allDrills = await db.select().from(drills).orderBy(drills.slug);
+    // Parallelize all independent database queries for instant execution
+    const [
+      drillList,
+      sessionStats,
+      masteryStats,
+      overdueDrillRows,
+      rootConcepts,
+    ] = await Promise.all([
+      db.select().from(drills).orderBy(drills.slug),
+      db
+        .select({
+          drillId: drillSessions.drillId,
+          attempts: sql<number>`count(*) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+          bestScore: sql<number | null>`max(${drillSessions.score}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+          lastPracticed: sql<string | null>`max(${drillSessions.finishedAt}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
+        })
+        .from(drillSessions)
+        .where(eq(drillSessions.userId, userId))
+        .groupBy(drillSessions.drillId),
+      db
+        .select({
+          drillId: concepts.drillId,
+          avgMastery: sql<number>`avg(${userConceptMastery.mastery})`,
+        })
+        .from(userConceptMastery)
+        .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
+        .where(eq(userConceptMastery.userId, userId))
+        .groupBy(concepts.drillId),
+      db
+        .select({
+          drillSlug: drills.slug,
+          totalOverdue: sql<number>`count(*) over()`,
+        })
+        .from(userConceptMastery)
+        .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
+        .innerJoin(drills, eq(drills.id, concepts.drillId))
+        .where(sql`${userConceptMastery.userId} = ${userId} AND ${userConceptMastery.nextDue} <= now()`)
+        .limit(1),
+      db
+        .select({
+          drillId: concepts.drillId,
+          label: concepts.label,
+        })
+        .from(concepts)
+        .where(sql`${concepts.parentId} IS NULL`)
+        .orderBy(concepts.sortOrder),
+    ]);
 
-    // 2. Fetch session stats per drill
-    const sessionStats = await db
-      .select({
-        drillId: drillSessions.drillId,
-        attempts: sql<number>`count(*) FILTER (WHERE ${drillSessions.status} = 'completed')`,
-        bestScore: sql<number | null>`max(${drillSessions.score}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
-        lastPracticed: sql<string | null>`max(${drillSessions.finishedAt}) FILTER (WHERE ${drillSessions.status} = 'completed')`,
-      })
-      .from(drillSessions)
-      .where(eq(drillSessions.userId, userId))
-      .groupBy(drillSessions.drillId);
+    allDrills = drillList;
 
     for (const s of sessionStats) {
       statsMap.set(s.drillId, {
@@ -87,51 +122,16 @@ export default async function TechnicalPracticePage() {
       });
     }
 
-    // 3. Fetch concept mastery per drill
-    const masteryStats = await db
-      .select({
-        drillId: concepts.drillId,
-        avgMastery: sql<number>`avg(${userConceptMastery.mastery})`,
-      })
-      .from(userConceptMastery)
-      .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
-      .where(eq(userConceptMastery.userId, userId))
-      .groupBy(concepts.drillId);
-
     for (const m of masteryStats) {
       if (m.avgMastery !== null) {
         masteryMap.set(m.drillId, Math.round(Number(m.avgMastery) * 100));
       }
     }
 
-    // 4. Overdue concepts for Spaced Repetition banner
-    const overdueRows = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(userConceptMastery)
-      .where(sql`${userConceptMastery.userId} = ${userId} AND ${userConceptMastery.nextDue} <= now()`);
-
-    overdueCount = Number(overdueRows[0]?.count) || 0;
-
-    const overdueDrillRows = overdueCount > 0 ? await db
-      .select({
-        drillSlug: drills.slug,
-      })
-      .from(userConceptMastery)
-      .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
-      .innerJoin(drills, eq(drills.id, concepts.drillId))
-      .where(sql`${userConceptMastery.userId} = ${userId} AND ${userConceptMastery.nextDue} <= now()`)
-      .limit(1) : [];
-    overdueDrillSlug = overdueDrillRows[0]?.drillSlug ?? "system-design";
-
-    // 5. Get root concepts per drill for focus tags
-    const rootConcepts = await db
-      .select({
-        drillId: concepts.drillId,
-        label: concepts.label,
-      })
-      .from(concepts)
-      .where(sql`${concepts.parentId} IS NULL`)
-      .orderBy(concepts.sortOrder);
+    if (overdueDrillRows.length > 0) {
+      overdueCount = Number(overdueDrillRows[0].totalOverdue) || 0;
+      overdueDrillSlug = overdueDrillRows[0].drillSlug ?? "system-design";
+    }
 
     for (const c of rootConcepts) {
       const arr = conceptTagsMap.get(c.drillId) || [];
@@ -232,7 +232,7 @@ export default async function TechnicalPracticePage() {
           const hasAttempts = (stats?.attempts ?? 0) > 0;
 
           return (
-            <Link key={drill.id} href={`/practice/${drill.slug}`} className="group flex flex-col h-full focus:outline-hidden">
+            <Link key={drill.id} href={`/practice/${drill.slug}`} prefetch={true} className="group flex flex-col h-full focus:outline-hidden">
               <Card className="h-full flex flex-col justify-between hover:border-indigo-300 hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden border-[#e2e8f0]">
                 {/* Top Bar with category & difficulty */}
                 <div className={`px-3.5 py-2 bg-gradient-to-r ${drill.color} border-b border-inherit/40 flex items-center justify-between shrink-0`}>
