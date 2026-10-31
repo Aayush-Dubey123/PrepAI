@@ -30,6 +30,10 @@ export async function POST(
 
     const { id: sessionId } = await params;
 
+    const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+    if (!isValidUuid) {
+      return NextResponse.json({ error: "Invalid session ID", code: "INVALID_SESSION_ID" }, { status: 400 });
+    }
     // Rate limit
     const rl = checkDrillAnswer(userId);
     if (!rl.allowed) {

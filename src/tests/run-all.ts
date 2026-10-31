@@ -6,6 +6,10 @@
  */
 
 import { spawnSync } from "child_process";
+import { config } from "dotenv";
+
+config({ path: ".env" });
+config({ path: ".env.local", override: true });
 
 const testSuites = [
   { name: "Brain Core Logic", file: "src/tests/brain.test.ts" },
@@ -25,10 +29,11 @@ const testSuites = [
   { name: "Drill Idempotency & Concurrency", file: "src/tests/drill-idempotency.test.ts" },
   { name: "Drill Seed Data Validation", file: "src/tests/drill-seed-validation.test.ts" },
   { name: "Drill Targeted Sessions & Feature Guards", file: "src/tests/drill-targeted-sessions.test.ts" },
+  { name: "Drills, Interview & Analytics E2E Integration", file: "src/tests/e2e-live-integration.test.ts" },
 ];
 
-if (testSuites.length !== 17) {
-  console.error(`Expected exactly 17 test suites, found ${testSuites.length}`);
+if (testSuites.length !== 18) {
+  console.error(`Expected exactly 18 test suites, found ${testSuites.length}`);
   process.exit(1);
 }
 

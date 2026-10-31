@@ -200,7 +200,6 @@ export async function POST(req: NextRequest) {
     const chunks = chunkText(cleanText);
     console.log(`[TTS] Synthesizing ${chunks.length} chunk(s) speaker=${speaker} totalChars=${cleanText.length}`);
 
-    const audioResults: string[] = [];
     const ttsStart = Date.now();
 
     logEvalLatency({
@@ -210,7 +209,7 @@ export async function POST(req: NextRequest) {
       ts: ttsStart,
     });
 
-    for (const chunk of chunks) {
+    const chunkPromises = chunks.map(async (chunk) => {
       const resp = await fetch(SARVAM_API, {
         method: "POST",
         headers: {
@@ -233,15 +232,23 @@ export async function POST(req: NextRequest) {
       if (!resp.ok) {
         const errText = await resp.text().catch(() => "");
         console.warn(`[TTS] Sarvam returned ${resp.status}: ${errText.slice(0, 120)}`);
-        return fallbackResponse(req, userId, sessionId, `Sarvam API error ${resp.status}`);
+        throw new Error(`Sarvam API error ${resp.status}`);
       }
 
       const data = await resp.json();
-      if (data.audios?.[0]) {
-        audioResults.push(data.audios[0]);
+      if (!data.audios?.[0]) {
+        throw new Error("No audio returned for chunk");
       }
-    }
+      return data.audios[0] as string;
+    });
 
+    let audioResults: string[];
+    try {
+      audioResults = await Promise.all(chunkPromises);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "TTS chunk synthesis error";
+      return fallbackResponse(req, userId, sessionId, errMsg);
+    }
     const ttsFinish = Date.now();
     logEvalLatency({
       interviewId: "active_session",

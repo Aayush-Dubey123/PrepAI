@@ -86,6 +86,7 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
     try {
       if (isSmartSet) setLoadingSmart(true);
       else if (practiceSetId) setLoadingSetId(practiceSetId);
+      else setLoadingSetId("ad-hoc");
 
       const clientRequestId = `gym-${drill.slug}-${Date.now()}`;
       const res = await fetch(`/api/drills/${drill.slug}/sessions`, {
@@ -276,9 +277,18 @@ export function DrillDetailClient({ drill, practiceSets, history, initialAutoRev
                 <div className="h-full flex flex-col items-center justify-center p-6 text-center bg-[#f8fafc] rounded-2xl border border-dashed border-[#cbd5e1] text-[#94a3b8] text-xs">
                   <Sparkles className="w-6 h-6 text-indigo-400 mb-2" />
                   <p className="font-semibold text-[#475569]">No curated sets published for this tier yet.</p>
-                  <p className="text-[11px] text-[#94a3b8] mt-1 max-w-xs">
-                    Try the Adaptive Weak-Concept Drill above to practice algorithmically selected questions.
+                  <p className="text-[11px] text-[#94a3b8] mt-1 max-w-xs mb-3">
+                    Start a quick ad-hoc practice session with algorithmically selected questions for this tier.
                   </p>
+                  <Button
+                    onClick={() => startSession(undefined, false)}
+                    disabled={loadingSetId !== null || loadingSmart}
+                    variant="primary"
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>{loadingSetId === "ad-hoc" ? "Starting..." : "Start Quick Practice"}</span>
+                  </Button>
                 </div>
               ) : (
                 setsForLevel.map((set) => (

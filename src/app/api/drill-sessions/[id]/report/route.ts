@@ -18,6 +18,10 @@ export async function POST(
 
     const { id: sessionId } = await params;
 
+    const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId);
+    if (!isValidUuid) {
+      return NextResponse.json({ error: "Invalid session ID", code: "INVALID_SESSION_ID" }, { status: 400 });
+    }
     const sessionRows = await db.select().from(drillSessions).where(eq(drillSessions.id, sessionId)).limit(1);
     if (sessionRows.length === 0) {
       return NextResponse.json({ error: "Session not found", code: "SESSION_NOT_FOUND" }, { status: 404 });

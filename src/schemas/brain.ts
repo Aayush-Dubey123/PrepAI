@@ -156,10 +156,10 @@ export const TurnDecisionSchema = z.object({
 });
 
 export const LLMTurnResponseSchema = z.object({
-  intent: IntentSchema,
-  evaluation: TurnEvaluationSchema,
-  decision: TurnDecisionSchema,
   say: z.string().min(1).max(600),
+  intent: IntentSchema,
+  decision: TurnDecisionSchema,
+  evaluation: TurnEvaluationSchema,
 });
 
 export type LLMTurnResponse = z.infer<typeof LLMTurnResponseSchema>;

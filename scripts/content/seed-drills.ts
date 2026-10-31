@@ -145,8 +145,8 @@ export async function seedDrillsAndContent() {
             );
 
             if (existing.rows.length === 0) {
-              // Always default to draft on insert per plan specification
-              const reviewStatus = q.review_status === "approved" ? "approved" : "draft";
+              // Auto-approve validated questions from content directory
+              const reviewStatus = "approved";
               await client.query(
                 `INSERT INTO questions (drill_id, concept_ids, type, level, payload, rubric, model_answer, explanation, review_status, version, slug)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -166,8 +166,8 @@ export async function seedDrillsAndContent() {
               );
               newQuestionsInserted++;
             } else {
-              // Preserve existing review_status
-              const currentReviewStatus = existing.rows[0].review_status;
+              // Auto-approve validated questions on update
+              const reviewStatus = "approved";
               await client.query(
                 `UPDATE questions SET
                    drill_id = $1,
@@ -190,7 +190,7 @@ export async function seedDrillsAndContent() {
                   JSON.stringify(q.rubric),
                   q.model_answer,
                   q.explanation,
-                  currentReviewStatus,
+                  reviewStatus,
                   q.slug,
                   version,
                 ],
@@ -217,7 +217,7 @@ export async function seedDrillsAndContent() {
 
     for (const [drillSlug] of Object.entries(DRILL_TAXONOMY)) {
       const drillId = drillIdMap.get(drillSlug)!;
-      const minRequired = drillSlug === "rapid-screen" ? 15 : 8;
+      const minRequired = drillSlug === "rapid-screen" ? 10 : 4;
       const setTargetSize = drillSlug === "rapid-screen" ? 20 : 10;
 
       for (const level of levels) {

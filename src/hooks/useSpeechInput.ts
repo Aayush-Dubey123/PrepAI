@@ -48,6 +48,27 @@ export function useSpeechInput({
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [supportsSpeechRecognition, setSupportsSpeechRecognition] = useState<boolean>(false);
 
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTranscriptRef = useRef<string>("");
+  const onFinalTranscriptRef = useRef(onFinalTranscript);
+  const onBargeInRef = useRef(onBargeIn);
+
+  useEffect(() => {
+    onFinalTranscriptRef.current = onFinalTranscript;
+  }, [onFinalTranscript]);
+
+  useEffect(() => {
+    onBargeInRef.current = onBargeIn;
+  }, [onBargeIn]);
+
+  useEffect(() => {
+    return () => {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const isSupported = Boolean(
@@ -67,6 +88,18 @@ export function useSpeechInput({
   }, [isListening]);
 
   const stopListening = useCallback(() => {
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
+    const pendingText = lastTranscriptRef.current.trim();
+    if (pendingText.length > 0) {
+      lastTranscriptRef.current = "";
+      setInterimTranscript("");
+      onFinalTranscriptRef.current(pendingText);
+    }
+
     if (recognitionRef.current) {
       try {
         (recognitionRef.current as { stop: () => void }).stop();
@@ -90,8 +123,14 @@ export function useSpeechInput({
 
     if (isListeningRef.current) return;
 
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    lastTranscriptRef.current = "";
+
     // Barge-in: Stop active AI speech immediately
-    onBargeIn?.();
+    onBargeInRef.current?.();
 
     // Abort and tear down any stale recognition session to avoid InvalidStateError
     if (recognitionRef.current) {
@@ -100,7 +139,6 @@ export function useSpeechInput({
       } catch {}
       recognitionRef.current = null;
     }
-
     interface ActiveRecognition {
       continuous: boolean;
       interimResults: boolean;
@@ -123,19 +161,25 @@ export function useSpeechInput({
       setIsListening(true);
       isListeningRef.current = true;
       setInterimTranscript("");
+      lastTranscriptRef.current = "";
       setTranscriptError(null);
     };
 
     let accumulatedFinal = "";
 
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
       const { resultIndex, results } = event;
       let interim = "";
 
       for (let i = resultIndex; i < results.length; i++) {
         const item = results[i];
         if (item?.[0]?.transcript?.trim()) {
-          onBargeIn?.();
+          onBargeInRef.current?.();
         }
         if (item?.isFinal) {
           accumulatedFinal += (item[0]?.transcript || "") + " ";
@@ -145,7 +189,20 @@ export function useSpeechInput({
       }
 
       const fullText = (accumulatedFinal + interim).trim();
+      lastTranscriptRef.current = fullText;
       setInterimTranscript(fullText);
+
+      if (fullText.length > 0) {
+        silenceTimeoutRef.current = setTimeout(() => {
+          const submittedText = lastTranscriptRef.current.trim();
+          if (submittedText.length > 0) {
+            lastTranscriptRef.current = "";
+            setInterimTranscript("");
+            stopListeningRef.current();
+            onFinalTranscriptRef.current(submittedText);
+          }
+        }, 1500);
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
@@ -171,6 +228,16 @@ export function useSpeechInput({
     recognition.onend = () => {
       setIsListening(false);
       isListeningRef.current = false;
+      const pendingText = lastTranscriptRef.current.trim();
+      if (pendingText.length > 0) {
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
+        }
+        lastTranscriptRef.current = "";
+        setInterimTranscript("");
+        onFinalTranscriptRef.current(pendingText);
+      }
     };
 
     recognitionRef.current = recognition;

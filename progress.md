@@ -106,7 +106,7 @@
 
 ## Automated Verification Suite
 
-The repository maintains 11 deterministic test suites in `src/tests/run-all.ts`:
+The repository maintains 18 comprehensive test suites executed via `src/tests/run-all.ts`:
 
 ```bash
 npm run test
@@ -125,9 +125,16 @@ npm run test
 | **Audio Conversation & Overlap** | Generation token invalidation, instant barge-in, turn transitions | 4 passed |
 | **Interview Deletion & Retention** | Cascade purge, ownership guard, bulk cleanup, cookie pruning | 3 passed |
 | **Security & Access Control** | IDOR barrier isolation, snapshot payload constraints, timing safety | 3 passed |
+| **Drill Deterministic & LLM Grading** | Rubric parsing, MCQ, multi-select, code trace, and fallback grading | 7 passed |
+| **Drill Smart Set Builder** | Adaptive mastery ranking, overdue concepts, recent-exclusion logic | 4 passed |
+| **Drill Mastery EMA & Spaced Repetition** | Exponential moving average (0.3/0.7), SM-2 intervals, monotonic gates | 7 passed |
+| **Drill Idempotency & Concurrency** | ClientRequestId deduplication, answer replay guards, index locks | 3 passed |
+| **Drill Seed Data Validation** | All 6 categories, 248 validated questions, valid option mapping | 5 passed |
+| **Drill Targeted Sessions & Feature Guards** | Precedence flags, 403 guards, targeted index pinning, 201 launch | 7 passed |
+| **Drills, Interview & Analytics E2E Integration** | Live session lifecycle, grading, EMA update, feedback normalization, blindspot-to-drill bridging, gym analytics | 8 passed |
 
 **Production Build Gate**:
 ```bash
 npm run build
 ```
-Compiled with Next.js 16 (Turbopack) and strict TypeScript typechecking with zero errors.
+Compiled with Next.js 16 (Turbopack) and strict TypeScript typechecking with zero errors (24/24 static pages generated).

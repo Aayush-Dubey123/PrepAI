@@ -76,26 +76,38 @@ export async function GET(
 
     // If empty transcript or brand new interview
     if (!chunks || chunks.length === 0) {
+      const earlyExitFeedback = {
+        overallScore: 0,
+        summary: "Interview ended before any technical questions were answered.",
+        strengths: [],
+        areasForImprovement: ["Interview was not completed."],
+        skillAssessments: [],
+        questionFeedback: [],
+        recommendedFollowUp: "Reschedule interview session.",
+        hiringRecommendation: "do_not_hire",
+        interviewDuration: 0,
+      };
+
+      await db
+        .update(interviews)
+        .set({
+          status: "completed",
+          currentPhase: "closed",
+          score: 0,
+          feedback: earlyExitFeedback,
+        })
+        .where(eq(interviews.id, interviewId));
+
       return NextResponse.json({
         success: true,
         interview: {
           id: interview.id,
           jobRole: interview.jobRole,
-          status: interview.status,
+          status: "completed",
           createdAt: interview.createdAt,
           score: 0,
         },
-        feedback: {
-          overallScore: 0,
-          summary: "Interview ended before any technical questions were answered.",
-          strengths: [],
-          areasForImprovement: ["Interview was not completed."],
-          skillAssessments: [],
-          questionFeedback: [],
-          recommendedFollowUp: "Reschedule interview session.",
-          hiringRecommendation: "do_not_hire",
-          interviewDuration: 0,
-        },
+        feedback: earlyExitFeedback,
       });
     }
 
@@ -116,29 +128,6 @@ export async function GET(
         score: generatedFeedback.overallScore,
       },
       feedback: generatedFeedback,
-    });
-
-    // Fallback if generate endpoint fails
-    return NextResponse.json({
-      success: true,
-      interview: {
-        id: interview.id,
-        jobRole: interview.jobRole,
-        status: interview.status,
-        createdAt: interview.createdAt,
-        score: interview.score ?? 50,
-      },
-      feedback: feedbackObj || {
-        overallScore: interview.score ?? 50,
-        summary: `Interview session completed for ${interview.jobRole}.`,
-        strengths: ["Completed technical interview session."],
-        areasForImprovement: [],
-        skillAssessments: [],
-        questionFeedback: [],
-        recommendedFollowUp: "Review transcript for details.",
-        hiringRecommendation: "consider",
-        interviewDuration: 0,
-      },
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

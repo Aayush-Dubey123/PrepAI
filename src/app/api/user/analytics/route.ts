@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/src/db/index";
 import { interviews } from "@/src/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or, inArray } from "drizzle-orm";
 import { computeUserAnalytics, computeGymAnalytics } from "@/src/lib/analytics/user";
 
 export const dynamic = "force-dynamic";
@@ -24,13 +24,27 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Strictly fetch only rows belonging to this authenticated user
-    let userInterviews: Array<any> = [];
+    // Retrieve interview IDs tracked in cookies for this candidate
+    const cookieHeader =
+      req.cookies.get("prepai_interview_ids")?.value ??
+      req.cookies.get("intervia_interview_ids")?.value ??
+      "";
+    const cookieInterviewIds = cookieHeader
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+    const conditions = [eq(interviews.userId, userId)];
+    if (cookieInterviewIds.length > 0) {
+      conditions.push(inArray(interviews.id, cookieInterviewIds));
+    }
+
+    let userInterviews: Array<unknown> = [];
     try {
       userInterviews = await db
         .select()
         .from(interviews)
-        .where(eq(interviews.userId, userId))
+        .where(or(...conditions))
         .orderBy(desc(interviews.createdAt));
     } catch (dbErr) {
       console.warn("[USER_ANALYTICS] Interviews query fallback (tables may be uninitialized):", dbErr);

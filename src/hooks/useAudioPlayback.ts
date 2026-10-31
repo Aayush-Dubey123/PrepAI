@@ -66,6 +66,20 @@ export function useAudioPlayback({
     setIsAiSpeaking(false);
   }, []);
 
+  // Preload speech synthesis voices on mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+      const handleVoicesChanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+      window.speechSynthesis.addEventListener("voiceschanged", handleVoicesChanged);
+      return () => {
+        window.speechSynthesis.removeEventListener("voiceschanged", handleVoicesChanged);
+      };
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -79,7 +93,7 @@ export function useAudioPlayback({
       abortControllerRef.current = controller;
       const fetchTimeout = setTimeout(() => {
         controller.abort();
-      }, 1500);
+      }, 2500);
 
       let response: Response;
       try {
@@ -91,7 +105,7 @@ export function useAudioPlayback({
         });
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") {
-          throw new Error("TTS fetch timed out (1.5s) — instant browser TTS fallback");
+          throw new Error("TTS fetch timed out (2.5s) — instant browser TTS fallback");
         }
         throw err;
       } finally {

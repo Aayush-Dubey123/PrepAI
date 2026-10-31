@@ -137,7 +137,17 @@ export function useTurnOrchestrator({
         timestamp: new Date(),
       };
 
-      setTranscript((prev) => [...prev, entry]);
+      setTranscript((prev) => {
+        const optimisticIndex = prev.findIndex(
+          (e) => (e.id.startsWith("u-") || e.id.startsWith("ai-")) && e.speaker === speaker && e.text === content
+        );
+        if (optimisticIndex !== -1) {
+          const next = [...prev];
+          next[optimisticIndex] = entry;
+          return next;
+        }
+        return [...prev, entry];
+      });
       return entry;
     },
     [interviewId]
@@ -247,6 +257,17 @@ export function useTurnOrchestrator({
 
         setIsAiThinking(false);
 
+        const aiEntry: TranscriptEntry = {
+          id: `ai-${Date.now()}`,
+          speaker: "ai",
+          text: turnResp.say,
+          timestamp: new Date(),
+        };
+        setTranscript((prev) => [...prev, aiEntry]);
+        void appendTranscript(turnResp.say, "ai").catch((e) =>
+          console.warn("[TRANSCRIPT] AI append failed:", e)
+        );
+
         if (turnResp.isComplete) {
           await endSession("natural");
         } else {
@@ -266,7 +287,7 @@ export function useTurnOrchestrator({
         isAttemptingOrchestratorRef.current = false;
       }
     },
-    [interviewId, onAiSpeakRequested, endSession]
+    [interviewId, onAiSpeakRequested, endSession, appendTranscript]
   );
 
   // Submit candidate answer
@@ -281,10 +302,19 @@ export function useTurnOrchestrator({
       setTranscriptError(null);
       setTurnState("processing");
 
+      const localUserEntry: TranscriptEntry = {
+        id: `u-${Date.now()}`,
+        speaker: "user",
+        text: finalText,
+        timestamp: new Date(),
+      };
+      setTranscript((prev) => [...prev, localUserEntry]);
+      void appendTranscript(finalText, "user").catch((e) =>
+        console.warn("[TRANSCRIPT] user append failed:", e)
+      );
+
       try {
-        const newEntry = await appendTranscript(finalText, "user");
-        const updatedTranscript = [...transcript, newEntry];
-        await callTurn(finalText, updatedTranscript);
+        await callTurn(finalText, [...transcript, localUserEntry]);
       } catch (error) {
         setTranscriptError(
           error instanceof Error

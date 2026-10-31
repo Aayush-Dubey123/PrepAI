@@ -135,7 +135,10 @@ export default function InterviewStagePage() {
       !isListening
     ) {
       console.log("[STAGE] AI finished speaking -> Auto-unmuting candidate mic");
-      startListening();
+      const timer = setTimeout(() => {
+        startListening();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [orchestrator.turnState, supportsSpeechRecognition, isListening, startListening]);
 
@@ -247,7 +250,7 @@ export default function InterviewStagePage() {
         </div>
 
         {/* 4. Bottom Controls Dock */}
-        <div className="sticky bottom-0 z-30 shrink-0 bg-[#f4f6fa]/95 md:bg-white/80 backdrop-blur-md py-1.5 md:py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] -mx-2.5 px-2.5 sm:-mx-4 sm:px-4 md:mx-0 md:px-0">
+        <div className="sticky bottom-0 z-30 shrink-0 pointer-events-auto bg-[#f4f6fa]/95 md:bg-white/80 backdrop-blur-md py-1.5 md:py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] -mx-2.5 px-2.5 sm:-mx-4 sm:px-4 md:mx-0 md:px-0">
           <InterviewControls
             isListening={isListening}
             isCameraOn={isCameraOn}

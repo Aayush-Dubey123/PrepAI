@@ -119,9 +119,9 @@ function QuestionPlayer() {
 
   // 1. Fetch Session Info
   const fetchSession = useCallback(async () => {
-    if (!sessionId) {
-      setViewState("error");
-      setErrorMessage("No sessionId provided in URL query.");
+    if (!sessionId || sessionId === "undefined" || sessionId === "null") {
+      toast("Select or start a drill set to begin practice.", { type: "info" });
+      router.push(`/practice/${drillSlug}`);
       return;
     }
 
@@ -129,9 +129,13 @@ function QuestionPlayer() {
       const res = await fetch(`/api/drill-sessions/${sessionId}`);
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 400 || res.status === 404) {
+          toast("Select or start a drill set to begin practice.", { type: "info" });
+          router.push(`/practice/${drillSlug}`);
+          return;
+        }
         throw new Error(data.error || "Failed to load session");
       }
-
       const s = data.session;
       const sessionObj: SessionData = {
         id: s.id,
@@ -159,7 +163,7 @@ function QuestionPlayer() {
       setViewState("error");
       setErrorMessage(err instanceof Error ? err.message : "Failed to load session");
     }
-  }, [sessionId]);
+  }, [sessionId, drillSlug, router, toast]);
 
   // 2. Fetch Question at Index
   const fetchQuestion = async (sid: string, index: number) => {

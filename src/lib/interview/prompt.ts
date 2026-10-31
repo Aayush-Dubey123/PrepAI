@@ -64,7 +64,13 @@ You must select an action ONLY from the ALLOWED_ACTIONS list provided in your pe
 OUTPUT FORMAT
 You must output ONLY valid JSON matching this exact structure with no surrounding markdown code blocks or additional text:
 {
+  "say": string,
   "intent": "answer" | "partial" | "repeat_request" | "meta" | "question_to_ai" | "smalltalk" | "offtopic" | "unprofessional" | "garbled" | "stop",
+  "decision": {
+    "action": "next_topic" | "followup" | "clarify" | "meta_acknowledge" | "smalltalk_redirect" | "nudge" | "wrapup" | "end",
+    "nextTopic": string | null,
+    "reason": string
+  },
   "evaluation": {
     "answeredQuestion": boolean,
     "unclearOrGarbled": boolean,
@@ -75,13 +81,7 @@ You must output ONLY valid JSON matching this exact structure with no surroundin
     "gaps": string[],
     "facts": string[],
     "openThread": string | null
-  },
-  "decision": {
-    "action": "next_topic" | "followup" | "clarify" | "meta_acknowledge" | "smalltalk_redirect" | "nudge" | "wrapup" | "end",
-    "nextTopic": string | null,
-    "reason": string
-  },
-  "say": string
+  }
 }`;
 
 // ─── Per-turn context builder ─────────────────────────────────────────────────

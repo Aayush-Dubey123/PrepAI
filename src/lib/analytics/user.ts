@@ -117,13 +117,76 @@ export interface GymAnalyticsData {
   streak: number;
 }
 
-export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsData {
+export interface NormalizedInterviewFeedback {
+  overallScore?: number;
+  hiringRecommendation?: string;
+  summary?: string;
+  strengths?: string[];
+  areasForImprovement?: string[];
+  questionFeedback?: Array<{
+    question?: string;
+    focusArea?: string;
+    answerQuality?: string;
+    strengths?: string[];
+    gaps?: string[];
+    suggestedImprovement?: string;
+  }>;
+  skillAssessments?: Array<{
+    skill?: string;
+    confidence?: string;
+    notes?: string;
+    demonstrated?: boolean;
+  }>;
+  [key: string]: unknown;
+}
+
+export interface NormalizedInterview {
+  id?: string;
+  jobRole?: string;
+  status?: string;
+  currentPhase?: string;
+  score?: number | null;
+  totalTurns?: number | null;
+  createdAt?: string | Date | null;
+  feedback?: NormalizedInterviewFeedback | null;
+}
+
+export function computeUserAnalytics(interviewsList: Array<unknown>): UserAnalyticsData {
   const safeList = Array.isArray(interviewsList) ? interviewsList : [];
+  const normalizedList: NormalizedInterview[] = [];
+
+  for (const item of safeList) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as Record<string, unknown>;
+    let fb = raw.feedback;
+    if (typeof fb === "string") {
+      try {
+        fb = JSON.parse(fb);
+      } catch {
+        fb = null;
+      }
+    }
+    const feedbackObj = fb && typeof fb === "object" ? (fb as NormalizedInterviewFeedback) : null;
+    normalizedList.push({
+      id: typeof raw.id === "string" ? raw.id : String(raw.id || ""),
+      jobRole: typeof raw.jobRole === "string" ? raw.jobRole : undefined,
+      status: typeof raw.status === "string" ? raw.status : undefined,
+      currentPhase: typeof raw.currentPhase === "string" ? raw.currentPhase : undefined,
+      score: typeof raw.score === "number" ? raw.score : null,
+      totalTurns: typeof raw.totalTurns === "number" ? raw.totalTurns : null,
+      createdAt: (raw.createdAt as string | Date | null) ?? null,
+      feedback: feedbackObj,
+    });
+  }
+
+  const isCompletedSession = (i: NormalizedInterview): boolean =>
+    i.status === "completed" ||
+    i.currentPhase === "closed" ||
+    typeof (i.feedback?.overallScore ?? i.score) === "number";
 
   // 1. Partition sessions
-  const completed = safeList.filter((i) => i?.status === "completed");
-  const ongoing = safeList.filter((i) => i?.status === "ongoing");
-
+  const completed = normalizedList.filter(isCompletedSession);
+  const ongoing = normalizedList.filter((i) => !isCompletedSession(i));
   // 2. Score calculations
   const validScores: number[] = [];
   for (const item of completed) {
@@ -140,7 +203,7 @@ export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsD
 
   const highestScore = validScores.length > 0 ? Math.max(...validScores) : null;
 
-  const totalTurns = safeList.reduce((acc, curr) => {
+  const totalTurns: number = normalizedList.reduce((acc: number, curr) => {
     const turns = typeof curr?.totalTurns === "number" && !isNaN(curr.totalTurns) ? curr.totalTurns : 0;
     return acc + turns;
   }, 0);
@@ -181,7 +244,7 @@ export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsD
   const gapCounts = new Map<string, number>();
   const strengthCounts = new Map<string, number>();
 
-  for (const interview of safeList) {
+  for (const interview of normalizedList) {
     const feedback = interview?.feedback;
     if (!feedback || typeof feedback !== "object") continue;
 
@@ -312,7 +375,7 @@ export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsD
   }
 
   // 6. Recent sessions
-  const sortedByRecent = [...safeList].sort((a, b) => {
+  const sortedByRecent = [...normalizedList].sort((a, b) => {
     const timeA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
     const timeB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
     return timeB - timeA;
@@ -344,7 +407,7 @@ export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsD
   };
 
   for (const interview of sortedByRecent) {
-    if (interview?.status === "completed" && interview?.feedback) {
+    if (isCompletedSession(interview) && interview?.feedback) {
       const fb = interview.feedback;
       const rec = (fb.hiringRecommendation || "unknown").toLowerCase();
       if (rec === "strong_hire") hiringDistribution.strong_hire++;
@@ -357,12 +420,12 @@ export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsD
           id: String(interview.id || ""),
           jobRole: String(interview.jobRole || "Technical Role"),
           overallScore: Math.round(fb.overallScore ?? interview.score ?? 0),
-          hiringRecommendation: fb.hiringRecommendation || "consider",
+          hiringRecommendation: (fb.hiringRecommendation as DetailedEvaluationSession["hiringRecommendation"]) || "consider",
           summary: String(fb.summary || ""),
           strengths: Array.isArray(fb.strengths) ? fb.strengths : [],
           areasForImprovement: Array.isArray(fb.areasForImprovement) ? fb.areasForImprovement : [],
-          questionFeedback: Array.isArray(fb.questionFeedback) ? fb.questionFeedback : [],
-          skillAssessments: Array.isArray(fb.skillAssessments) ? fb.skillAssessments : [],
+          questionFeedback: (Array.isArray(fb.questionFeedback) ? fb.questionFeedback : []) as EvaluatedQuestionFeedback[],
+          skillAssessments: (Array.isArray(fb.skillAssessments) ? fb.skillAssessments : []) as DetailedEvaluationSession["skillAssessments"],
           createdAt: interview.createdAt ? new Date(interview.createdAt).toISOString() : new Date().toISOString(),
         });
       }
@@ -395,20 +458,19 @@ export function computeUserAnalytics(interviewsList: Array<any>): UserAnalyticsD
   // 9. Top Blindspots with Target Drill Mapping
   const topBlindspots: TopBlindspot[] = sortedGaps.slice(0, 5).map(([area, frequency]) => {
     const lower = area.toLowerCase();
-    let recommendedDrill = "Rapid-Fire Technical Screen";
+    let recommendedDrill = "rapid-screen";
 
     if (lower.includes("design") || lower.includes("scale") || lower.includes("architect") || lower.includes("cache") || lower.includes("system")) {
-      recommendedDrill = "System Design & Distributed Scalability Drill";
+      recommendedDrill = "system-design";
     } else if (lower.includes("algo") || lower.includes("complexity") || lower.includes("tree") || lower.includes("array") || lower.includes("sort")) {
-      recommendedDrill = "Algorithmic Logic & Edge-Case Blitz";
+      recommendedDrill = "algo-logic";
     } else if (lower.includes("star") || lower.includes("behavior") || lower.includes("conflict") || lower.includes("team") || lower.includes("lead")) {
-      recommendedDrill = "Behavioral & Executive STAR Simulator";
+      recommendedDrill = "behavioral-star";
     } else if (lower.includes("react") || lower.includes("frontend") || lower.includes("dom") || lower.includes("render") || lower.includes("css")) {
-      recommendedDrill = "Frontend Architecture & State Machine Drill";
+      recommendedDrill = "frontend-arch";
     } else if (lower.includes("database") || lower.includes("postgres") || lower.includes("sql") || lower.includes("index") || lower.includes("concurren") || lower.includes("lock")) {
-      recommendedDrill = "Database & Concurrency Deep Dive";
+      recommendedDrill = "database-concurrency";
     }
-
     return {
       area,
       frequency,

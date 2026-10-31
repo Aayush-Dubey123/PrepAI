@@ -55,6 +55,14 @@ import type {
 } from "@/src/lib/analytics/user";
 type TabKey = "feedback" | "practice-sets" | "curriculum";
 
+const VALID_DRILL_SLUGS: Record<string, true> = {
+  "system-design": true,
+  "algo-logic": true,
+  "behavioral-star": true,
+  "frontend-arch": true,
+  "database-concurrency": true,
+  "rapid-screen": true,
+};
 interface RoadmapStage {
   stage: number;
   title: string;
@@ -170,7 +178,8 @@ export default function CandidateAnalyticsPage() {
     fetchAnalytics(false);
   }, []);
 
-  const resolveRecommendedSet = useCallback(async (drillSlug: string, targetLevel: string) => {
+  const resolveRecommendedSet = useCallback(async (rawSlug: string, targetLevel: string) => {
+    const drillSlug = VALID_DRILL_SLUGS[rawSlug] ? rawSlug : "rapid-screen";
     try {
       setResolvingSet(true);
       const res = await fetch(`/api/drills/${drillSlug}/sets`);
@@ -198,7 +207,8 @@ export default function CandidateAnalyticsPage() {
 
   useEffect(() => {
     if (!data) return;
-    const targetSlug = data.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+    const rawSlug = data.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+    const targetSlug = VALID_DRILL_SLUGS[rawSlug] ? rawSlug : "rapid-screen";
     const targetLevel = (data.summary?.totalInterviews ?? 0) > 0 ? "senior" : "foundational";
     resolveRecommendedSet(targetSlug, targetLevel);
   }, [data, resolveRecommendedSet]);
@@ -206,7 +216,8 @@ export default function CandidateAnalyticsPage() {
   const handleLaunchRecommendedSet = async () => {
     if (!data) return;
     setLaunchingSession(true);
-    const targetSlug = resolvedPracticeSet?.drillSlug || data.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+    const rawSlug = resolvedPracticeSet?.drillSlug || data.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+    const targetSlug = VALID_DRILL_SLUGS[rawSlug] ? rawSlug : "rapid-screen";
     const targetLevel = resolvedPracticeSet?.level || ((data.summary?.totalInterviews ?? 0) > 0 ? "senior" : "foundational");
 
     try {
@@ -241,10 +252,11 @@ export default function CandidateAnalyticsPage() {
   };
 
   const handleLaunchDirectDrill = async (
-    drillSlug: string,
+    rawSlug: string,
     level: string = "senior",
     targetConceptId?: string,
   ) => {
+    const drillSlug = VALID_DRILL_SLUGS[rawSlug] ? rawSlug : "rapid-screen";
     try {
       setLaunchingSession(true);
       const res = await fetch(`/api/drills/${drillSlug}/sessions`, {

@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { db } from "@/src/db";
@@ -125,10 +125,45 @@ export async function POST(
       // Path B: Adaptive Smart Set (Targeted or Weak-Concept)
       resolvedQuestionIds = await generateSmartSet(userId, drill.id, body.level, body.targetConceptId);
       if (resolvedQuestionIds.length < 4) {
-        return NextResponse.json(
-          { error: "Not enough approved questions available for smart set", code: "INSUFFICIENT_CONTENT" },
-          { status: 409 },
-        );
+        const needed = 4 - resolvedQuestionIds.length;
+        const supplement = await db
+          .select({ id: questions.id })
+          .from(questions)
+          .where(
+            and(
+              eq(questions.drillId, drill.id),
+              eq(questions.level, body.level),
+              eq(questions.reviewStatus, "approved"),
+              resolvedQuestionIds.length > 0 ? notInArray(questions.id, resolvedQuestionIds) : sql`true`,
+            ),
+          )
+          .orderBy(sql`random()`)
+          .limit(needed);
+
+        resolvedQuestionIds = [...resolvedQuestionIds, ...supplement.map((q) => q.id)];
+
+        if (resolvedQuestionIds.length < 4) {
+          const anyRemaining = await db
+            .select({ id: questions.id })
+            .from(questions)
+            .where(
+              and(
+                eq(questions.drillId, drill.id),
+                eq(questions.reviewStatus, "approved"),
+                resolvedQuestionIds.length > 0 ? notInArray(questions.id, resolvedQuestionIds) : sql`true`,
+              ),
+            )
+            .orderBy(sql`random()`)
+            .limit(4 - resolvedQuestionIds.length);
+          resolvedQuestionIds = [...resolvedQuestionIds, ...anyRemaining.map((q) => q.id)];
+        }
+
+        if (resolvedQuestionIds.length < 4) {
+          return NextResponse.json(
+            { error: "Not enough approved questions available for smart set", code: "INSUFFICIENT_CONTENT" },
+            { status: 409 },
+          );
+        }
       }
     } else if (body.practiceSetId) {
       // Path A: Standard Practice Set
@@ -174,7 +209,7 @@ export async function POST(
     } else {
       // Path C: Random Ad-hoc Drill
       const targetCount = slug === "rapid-screen" ? 20 : 10;
-      const candidateQuestions = await db
+      let candidateQuestions = await db
         .select({ id: questions.id })
         .from(questions)
         .where(
@@ -186,6 +221,24 @@ export async function POST(
         )
         .orderBy(sql`random()`)
         .limit(targetCount);
+
+      if (candidateQuestions.length < 4) {
+        const existingIds = candidateQuestions.map((q) => q.id);
+        const fallbackQuestions = await db
+          .select({ id: questions.id })
+          .from(questions)
+          .where(
+            and(
+              eq(questions.drillId, drill.id),
+              eq(questions.reviewStatus, "approved"),
+              existingIds.length > 0 ? notInArray(questions.id, existingIds) : sql`true`,
+            ),
+          )
+          .orderBy(sql`random()`)
+          .limit(targetCount - candidateQuestions.length);
+
+        candidateQuestions = [...candidateQuestions, ...fallbackQuestions];
+      }
 
       if (candidateQuestions.length < 4) {
         return NextResponse.json(
