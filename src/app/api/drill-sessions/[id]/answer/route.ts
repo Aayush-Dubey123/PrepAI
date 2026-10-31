@@ -10,11 +10,11 @@ import {
   SelfAssessmentSchema,
   type Rubric,
   type QuestionPayload,
-} from "@/src/schemas/drills";
-import { checkDrillAnswer } from "@/src/lib/rate-limit";
-import { gradeAnswer } from "@/src/lib/drills/grading";
-import { computeSessionScore } from "@/src/lib/drills/scoring";
-import { updateConceptMastery } from "@/src/lib/drills/mastery";
+} from "@/src/schemas/practice/drills";
+import { checkDrillAnswer } from "@/src/lib/security/rate-limit";
+import { gradeAnswer } from "@/src/lib/drills/evaluation/grading";
+import { computeSessionScore } from "@/src/lib/drills/evaluation/scoring";
+import { updateConceptMastery } from "@/src/lib/drills/progression/mastery";
 
 class ConcurrentSubmissionError extends Error {}
 

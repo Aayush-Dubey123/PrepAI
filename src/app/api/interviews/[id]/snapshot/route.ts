@@ -9,7 +9,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/src/db/index";
 import { interviews } from "@/src/db/schema";
 import { eq, and } from "drizzle-orm";
-import { logEvent } from "@/src/lib/audit";
+import { logEvent } from "@/src/lib/security/audit";
 import { z } from "zod";
 
 const SnapshotRequestSchema = z.object({

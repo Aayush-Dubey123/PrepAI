@@ -3,14 +3,14 @@
 import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/src/components/ui/Button";
-import { Badge } from "@/src/components/ui/Badge";
-import { Card } from "@/src/components/ui/Card";
-import { ProgressBar } from "@/src/components/ui/ProgressBar";
-import LatticeLoader from "@/src/components/ui/LatticeLoader";
-import { useToast } from "@/src/components/ui/ToastProvider";
+import { Button } from "@/src/components/ui/actions/Button";
+import { Badge } from "@/src/components/ui/actions/Badge";
+import { Card } from "@/src/components/ui/containers/Card";
+import { ProgressBar } from "@/src/components/ui/containers/ProgressBar";
+import LatticeLoader from "@/src/components/ui/loaders/LatticeLoader";
+import { useToast } from "@/src/components/ui/feedback/ToastProvider";
 import { QuestionDispatcher } from "@/src/components/gym/QuestionRenderers";
-import type { ClientQuestionPayload, GradingResult } from "@/src/schemas/drills";
+import type { ClientQuestionPayload, GradingResult } from "@/src/schemas/practice/drills";
 import {
   ArrowLeft,
   Clock,

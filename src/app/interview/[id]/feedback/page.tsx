@@ -29,11 +29,11 @@ import {
   Share2,
   Check,
 } from "lucide-react";
-import { useToast } from "@/src/components/ui/ToastProvider";
-import { generateFeedbackPdf } from "@/src/lib/pdf-export";
-import { Button } from "@/src/components/ui/Button";
-import { Badge } from "@/src/components/ui/Badge";
-import { Card, CardHeader, CardTitle } from "@/src/components/ui/Card";
+import { useToast } from "@/src/components/ui/feedback/ToastProvider";
+import { generateFeedbackPdf } from "@/src/lib/documents/pdf-export";
+import { Button } from "@/src/components/ui/actions/Button";
+import { Badge } from "@/src/components/ui/actions/Badge";
+import { Card, CardHeader, CardTitle } from "@/src/components/ui/containers/Card";
 interface FeedbackData {
   overallScore: number;
   summary: string;

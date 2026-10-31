@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { devClearUserLimits } from "@/src/lib/rate-limit";
+import { devClearUserLimits } from "@/src/lib/security/rate-limit";
 
 export async function POST() {
   if (process.env.NODE_ENV === "production") {

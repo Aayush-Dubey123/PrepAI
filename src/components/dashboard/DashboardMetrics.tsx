@@ -2,8 +2,8 @@
 
 import React from "react";
 import { Trophy, Bookmark, Sparkles } from "lucide-react";
-import { Badge } from "@/src/components/ui/Badge";
-import { Card, CardContent } from "@/src/components/ui/Card";
+import { Badge } from "@/src/components/ui/actions/Badge";
+import { Card, CardContent } from "@/src/components/ui/containers/Card";
 
 export interface InterviewMetricItem {
   id: string;

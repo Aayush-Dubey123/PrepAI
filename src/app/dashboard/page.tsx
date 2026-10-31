@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { AppSidebar } from "@/src/components/app-sidebar";
-import { ResumeUploadFlow } from "@/src/components/resume-upload-flow";
-import { InterviewHistory, type InterviewSummary } from "@/src/components/interview-history";
+import { AppSidebar } from "@/src/components/sidebar/app-sidebar";
+import { ResumeUploadFlow } from "@/src/components/onboarding/resume-upload-flow";
+import { InterviewHistory, type InterviewSummary } from "@/src/components/dashboard/interview-history";
 import { DashboardMetrics } from "@/src/components/dashboard/DashboardMetrics";
 import { Search, Bell, Sparkles, CheckCircle2, Info, X } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";

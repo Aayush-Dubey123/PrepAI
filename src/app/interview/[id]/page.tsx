@@ -2,20 +2,20 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { useWebcamStream } from "@/src/hooks/useWebcamStream";
-import { useAudioPlayback } from "@/src/hooks/useAudioPlayback";
-import { useSpeechInput } from "@/src/hooks/useSpeechInput";
-import { useSilenceNudge } from "@/src/hooks/useSilenceNudge";
-import { useIntegrityMonitor } from "@/src/hooks/useIntegrityMonitor";
-import { useTurnOrchestrator } from "@/src/hooks/useTurnOrchestrator";
+import { useWebcamStream } from "@/src/hooks/proctoring/useWebcamStream";
+import { useAudioPlayback } from "@/src/hooks/audio/useAudioPlayback";
+import { useSpeechInput } from "@/src/hooks/audio/useSpeechInput";
+import { useSilenceNudge } from "@/src/hooks/interview/useSilenceNudge";
+import { useIntegrityMonitor } from "@/src/hooks/proctoring/useIntegrityMonitor";
+import { useTurnOrchestrator } from "@/src/hooks/interview/useTurnOrchestrator";
 
-import { InterviewHeader } from "@/src/components/interview-room/InterviewHeader";
-import { InterviewerTile } from "@/src/components/interview-room/InterviewerTile";
-import { CandidateTile } from "@/src/components/interview-room/CandidateTile";
-import { InterviewControls } from "@/src/components/interview-room/InterviewControls";
-import { TranscriptDrawer } from "@/src/components/interview-room/TranscriptDrawer";
-import { IntegrityAlertBanner } from "@/src/components/interview-room/IntegrityAlertBanner";
-import { EndInterviewModal } from "@/src/components/interview-room/EndInterviewModal";
+import { InterviewHeader } from "@/src/components/interview-room/chrome/InterviewHeader";
+import { InterviewerTile } from "@/src/components/interview-room/tiles/InterviewerTile";
+import { CandidateTile } from "@/src/components/interview-room/tiles/CandidateTile";
+import { InterviewControls } from "@/src/components/interview-room/controls/InterviewControls";
+import { TranscriptDrawer } from "@/src/components/interview-room/controls/TranscriptDrawer";
+import { IntegrityAlertBanner } from "@/src/components/interview-room/chrome/IntegrityAlertBanner";
+import { EndInterviewModal } from "@/src/components/interview-room/modals/EndInterviewModal";
 
 export default function InterviewStagePage() {
   const params = useParams<{ id: string }>();

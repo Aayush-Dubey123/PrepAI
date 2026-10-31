@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { AppSidebar } from "@/src/components/app-sidebar";
-import { isTechnicalPracticeEnabled } from "@/src/lib/config";
+import { AppSidebar } from "@/src/components/sidebar/app-sidebar";
+import { isTechnicalPracticeEnabled } from "@/src/lib/core/config";
 
 export default function PracticeLayout({ children }: { children: React.ReactNode }) {
   if (!isTechnicalPracticeEnabled()) {

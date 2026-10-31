@@ -22,10 +22,10 @@ import { extractText } from "unpdf";
 import mammoth from "mammoth";
 import { db } from "@/src/db/index";
 import { resumes } from "@/src/db/schema";
-import { ExtractedResumeSchema, type ExtractedResume } from "@/src/schemas/resume";
+import { ExtractedResumeSchema, type ExtractedResume } from "@/src/schemas/candidate/resume";
 import { generate, tryParseAndValidate } from "@/src/lib/llm/index";
-import { checkParseResumeLimit } from "@/src/lib/rate-limit";
-import { logEvent } from "@/src/lib/audit";
+import { checkParseResumeLimit } from "@/src/lib/security/rate-limit";
+import { logEvent } from "@/src/lib/security/audit";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 

@@ -27,8 +27,8 @@ import {
   type ConversationState,
   type AskedQuestion,
   type TurnScore,
-} from "@/src/schemas/brain";
-import { ExtractedResumeSchema } from "@/src/schemas/resume";
+} from "@/src/schemas/evaluation/brain";
+import { ExtractedResumeSchema } from "@/src/schemas/candidate/resume";
 import { generate, tryParseAndValidate } from "@/src/lib/llm/index";
 import {
   loadState,
@@ -47,13 +47,13 @@ import {
   computeTargetDepth,
   computeAvgAnswerLength,
   getOpeningTemplate,
-} from "@/src/lib/interview/state";
-import { INTERVIEWER_SYSTEM_PROMPT, buildTurnContext } from "@/src/lib/interview/prompt";
-import { BRAIN_CONFIG } from "@/src/lib/interview/brain-config";
-import { checkTurnLimit, isReplayedRequest } from "@/src/lib/rate-limit";
+} from "@/src/lib/interview/orchestration/state";
+import { INTERVIEWER_SYSTEM_PROMPT, buildTurnContext } from "@/src/lib/interview/orchestration/prompt";
+import { BRAIN_CONFIG } from "@/src/lib/interview/config/brain-config";
+import { checkTurnLimit, isReplayedRequest } from "@/src/lib/security/rate-limit";
 import { getKBEntry } from "@/src/lib/interview/knowledge-base/index";
-import { logEvalLatency } from "@/src/eval/logger";
-import { logEvent } from "@/src/lib/audit";
+import { logEvalLatency } from "@/src/eval/analytics/logger";
+import { logEvent } from "@/src/lib/security/audit";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 
@@ -264,7 +264,7 @@ export async function POST(
 
       const parsed = tryParseAndValidate(result.text, LLMTurnResponseSchema);
       if (parsed.ok) {
-        llmResponse = parsed.data as import("@/src/schemas/brain").LLMTurnResponse;
+        llmResponse = parsed.data as import("@/src/schemas/evaluation/brain").LLMTurnResponse;
       } else {
         console.warn("[TURN] LLM response schema invalid:", parsed.error, "Raw:", result.text.slice(0, 200));
       }

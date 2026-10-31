@@ -16,13 +16,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z, ZodError } from "zod";
 import { db } from "@/src/db/index";
 import { interviews, resumes, transcriptChunks } from "@/src/db/schema";
-import { DUMMY_RESUME_ID, MOCK_STRUCTURED_RESUME } from "@/src/lib/default-interview-plan";
-import { ExtractedResumeSchema } from "@/src/schemas/resume";
-import { ConversationStateSchema } from "@/src/schemas/brain";
-import { checkInterviewCreate } from "@/src/lib/rate-limit";
-import { generateCoverageTopics } from "@/src/lib/interview/state";
-import { logEvent } from "@/src/lib/audit";
-import "@/src/lib/config";
+import { DUMMY_RESUME_ID, MOCK_STRUCTURED_RESUME } from "@/src/lib/documents/default-interview-plan";
+import { ExtractedResumeSchema } from "@/src/schemas/candidate/resume";
+import { ConversationStateSchema } from "@/src/schemas/evaluation/brain";
+import { checkInterviewCreate } from "@/src/lib/security/rate-limit";
+import { generateCoverageTopics } from "@/src/lib/interview/orchestration/state";
+import { logEvent } from "@/src/lib/security/audit";
+import "@/src/lib/core/config";
 
 const InitializeRequestSchema = z.object({
   resumeId: z.string(),

@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/src/components/header";
-import { CookieConsent } from "@/src/components/cookie-consent";
-import { ToastProvider } from "@/src/components/ui/ToastProvider";
-import { NavigationProgressBar } from "@/src/components/navigation-progress";
+import { Header } from "@/src/components/navigation/header";
+import { CookieConsent } from "@/src/components/compliance/cookie-consent";
+import { ToastProvider } from "@/src/components/ui/feedback/ToastProvider";
+import { NavigationProgressBar } from "@/src/components/navigation/navigation-progress";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

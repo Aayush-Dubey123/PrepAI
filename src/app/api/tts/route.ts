@@ -14,9 +14,9 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createHash } from "crypto";
-import { logEvalLatency } from "@/src/eval/logger";
-import { logEvent } from "@/src/lib/audit";
-import { checkTtsLimit } from "@/src/lib/rate-limit";
+import { logEvalLatency } from "@/src/eval/analytics/logger";
+import { logEvent } from "@/src/lib/security/audit";
+import { checkTtsLimit } from "@/src/lib/security/rate-limit";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

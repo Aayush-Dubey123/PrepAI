@@ -1,5 +1,5 @@
 import React from "react";
-import { AppSidebar } from "@/src/components/app-sidebar";
+import { AppSidebar } from "@/src/components/sidebar/app-sidebar";
 
 export default function AnalyticsLoading() {
   return (

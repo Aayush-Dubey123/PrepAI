@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/db";
 import { drillSessions, sessionAnswers, questions } from "@/src/db/schema";
-import { computeSessionScore } from "@/src/lib/drills/scoring";
+import { computeSessionScore } from "@/src/lib/drills/evaluation/scoring";
 
 export async function POST(
   req: NextRequest,

@@ -1,5 +1,5 @@
 import React from "react";
-import LatticeLoader from "@/src/components/ui/LatticeLoader";
+import LatticeLoader from "@/src/components/ui/loaders/LatticeLoader";
 
 export default function PlayLoading() {
   return (

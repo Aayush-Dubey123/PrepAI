@@ -6,7 +6,7 @@ import {
   type ObjectDetectorResult,
 } from "@mediapipe/tasks-vision";
 import { INTEGRITY_CONFIG } from "./config";
-import type { IntegrityEvent, IntegrityEventType, CalibrationData } from "@/src/schemas/integrity";
+import type { IntegrityEvent, IntegrityEventType, CalibrationData } from "@/src/schemas/practice/integrity";
 
 // ── Box Visibility Thresholds & Durations (Cosmetic Fade Rule) ────────────────
 export const BOX_SWEEP_DISPLACEMENT_THRESHOLD = 0.50; // 50% of frame width displacement

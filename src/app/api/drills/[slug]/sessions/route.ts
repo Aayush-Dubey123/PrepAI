@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { db } from "@/src/db";
 import { drills, practiceSets, drillSessions, questions } from "@/src/db/schema";
-import { DrillSessionCreateSchema } from "@/src/schemas/drills";
-import { checkDrillSessionCreate } from "@/src/lib/rate-limit";
-import { generateSmartSet, ConceptContentError } from "@/src/lib/drills/smart-set";
-import { isTechnicalPracticeEnabled } from "@/src/lib/config";
+import { DrillSessionCreateSchema } from "@/src/schemas/practice/drills";
+import { checkDrillSessionCreate } from "@/src/lib/security/rate-limit";
+import { generateSmartSet, ConceptContentError } from "@/src/lib/drills/progression/smart-set";
+import { isTechnicalPracticeEnabled } from "@/src/lib/core/config";
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },

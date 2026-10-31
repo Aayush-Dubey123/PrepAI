@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AppSidebar } from "@/src/components/app-sidebar";
+import { AppSidebar } from "@/src/components/sidebar/app-sidebar";
 import { UserButton } from "@clerk/nextjs";
-import { Badge } from "@/src/components/ui/Badge";
-import { useToast } from "@/src/components/ui/ToastProvider";
+import { Badge } from "@/src/components/ui/actions/Badge";
+import { useToast } from "@/src/components/ui/feedback/ToastProvider";
 import {
   TrendingUp,
   Award,

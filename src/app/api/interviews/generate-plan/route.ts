@@ -7,8 +7,8 @@ import { auth } from "@clerk/nextjs/server";
 import { z, ZodError } from "zod";
 import {
   DEFAULT_INTERVIEW_PLAN,
-} from "@/src/lib/default-interview-plan";
-import { InterviewPlanResponseSchema } from "@/src/schemas/interview";
+} from "@/src/lib/documents/default-interview-plan";
+import { InterviewPlanResponseSchema } from "@/src/schemas/interview/interview";
 import { generate, tryParseAndValidate } from "@/src/lib/llm/index";
 
 const GeneratePlanRequestSchema = z.object({

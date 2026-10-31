@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Button } from "@/src/components/ui/Button";
-import { Badge } from "@/src/components/ui/Badge";
-import { Textarea } from "@/src/components/ui/Textarea";
-import { Input } from "@/src/components/ui/Input";
-import { useSpeechInput } from "@/src/hooks/useSpeechInput";
+import { Button } from "@/src/components/ui/actions/Button";
+import { Badge } from "@/src/components/ui/actions/Badge";
+import { Textarea } from "@/src/components/ui/forms/Textarea";
+import { Input } from "@/src/components/ui/forms/Input";
+import { useSpeechInput } from "@/src/hooks/audio/useSpeechInput";
 import {
   Mic,
   MicOff,
@@ -14,7 +14,7 @@ import {
   AlertCircle,
   HelpCircle,
 } from "lucide-react";
-import type { ClientQuestionPayload } from "@/src/schemas/drills";
+import type { ClientQuestionPayload } from "@/src/schemas/practice/drills";
 
 interface RendererProps {
   payload: ClientQuestionPayload;

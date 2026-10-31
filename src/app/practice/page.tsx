@@ -5,9 +5,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/src/db";
 import { drills, drillSessions, concepts, userConceptMastery } from "@/src/db/schema";
-import { Card } from "@/src/components/ui/Card";
-import { Badge } from "@/src/components/ui/Badge";
-import { ProgressBar } from "@/src/components/ui/ProgressBar";
+import { Card } from "@/src/components/ui/containers/Card";
+import { Badge } from "@/src/components/ui/actions/Badge";
+import { ProgressBar } from "@/src/components/ui/containers/ProgressBar";
 import {
   Flame,
   Clock,

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { db } from "@/src/db";
 import { drillSessions, questionReports, sessionAnswers } from "@/src/db/schema";
-import { ReportQuestionSchema } from "@/src/schemas/drills";
+import { ReportQuestionSchema } from "@/src/schemas/practice/drills";
 
 export async function POST(
   req: NextRequest,

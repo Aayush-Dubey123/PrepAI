@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/src/components/ui/Button";
-import { Badge } from "@/src/components/ui/Badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/Card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/src/components/ui/Tabs";
-import { useToast } from "@/src/components/ui/ToastProvider";
+import { Button } from "@/src/components/ui/actions/Button";
+import { Badge } from "@/src/components/ui/actions/Badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/src/components/ui/containers/Card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/src/components/ui/overlays/Tabs";
+import { useToast } from "@/src/components/ui/feedback/ToastProvider";
 import {
   ArrowLeft,
   Clock,

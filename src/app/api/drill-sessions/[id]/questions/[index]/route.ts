@@ -3,8 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/src/db";
 import { drillSessions, questions, sessionAnswers } from "@/src/db/schema";
-import { ClientQuestionPayloadSchema } from "@/src/schemas/drills";
-import { computeSessionScore } from "@/src/lib/drills/scoring";
+import { ClientQuestionPayloadSchema } from "@/src/schemas/practice/drills";
+import { computeSessionScore } from "@/src/lib/drills/evaluation/scoring";
 
 export async function GET(
   req: NextRequest,

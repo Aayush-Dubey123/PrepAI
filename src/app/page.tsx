@@ -3,9 +3,9 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ShieldCheck, FileCheck, Cpu } from "lucide-react";
-import { Button } from "@/src/components/ui/Button";
+import { Button } from "@/src/components/ui/actions/Button";
 
-const Orb = dynamic(() => import("@/src/components/ui/Orb"), {
+const Orb = dynamic(() => import("@/src/components/ui/visuals/Orb"), {
   ssr: false,
 });
 

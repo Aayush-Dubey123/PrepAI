@@ -3,11 +3,11 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { IntegrityDetector } from "@/src/lib/integrity/detector";
-import { MicCheck } from "@/src/components/lobby/MicCheck";
-import { SpeakerCheck } from "@/src/components/lobby/SpeakerCheck";
-import { SpeechCheck } from "@/src/components/lobby/SpeechCheck";
-import { CameraCalibrationCheck } from "@/src/components/lobby/CameraCalibrationCheck";
-import { ReadinessBar } from "@/src/components/lobby/ReadinessBar";
+import { MicCheck } from "@/src/components/lobby/hardware/MicCheck";
+import { SpeakerCheck } from "@/src/components/lobby/audio/SpeakerCheck";
+import { SpeechCheck } from "@/src/components/lobby/audio/SpeechCheck";
+import { CameraCalibrationCheck } from "@/src/components/lobby/hardware/CameraCalibrationCheck";
+import { ReadinessBar } from "@/src/components/lobby/status/ReadinessBar";
 import { Sparkles, AlertCircle } from "lucide-react";
 
 export default function InterviewLobbyPage() {

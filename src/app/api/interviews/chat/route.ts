@@ -9,8 +9,8 @@ import { ZodError } from "zod";
 import { db } from "@/src/db/index";
 import { interviews } from "@/src/db/schema";
 import { toPgVectorLiteral } from "@/src/db/vector";
-import { embedText } from "@/src/lib/gemini-embeddings";
-import { InterviewChatSchema } from "@/src/schemas/chat";
+import { embedText } from "@/src/lib/ai/gemini-embeddings";
+import { InterviewChatSchema } from "@/src/schemas/candidate/chat";
 import { generate } from "@/src/lib/llm/index";
 
 const RAG_SYSTEM = `You are an interview session assistant for PrepAI.

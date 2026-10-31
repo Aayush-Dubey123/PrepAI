@@ -19,11 +19,11 @@ import {
   HEAVY_TIMEOUT_MS,
   PROVIDERS,
   type ModelConfig,
-} from "./config";
-import { isOpen } from "./circuit-breaker";
-import { geminiGenerate } from "./gemini-adapter";
-import { openaiCompatGenerate } from "./openai-compat-adapter";
-import type { GenerateOptions, GenerateResult } from "./gemini-adapter";
+} from "./core/config";
+import { isOpen } from "./providers/circuit-breaker";
+import { geminiGenerate } from "./adapters/gemini-adapter";
+import { openaiCompatGenerate } from "./adapters/openai-compat-adapter";
+import type { GenerateOptions, GenerateResult } from "./adapters/gemini-adapter";
 
 export type TaskType = "live" | "heavy";
 

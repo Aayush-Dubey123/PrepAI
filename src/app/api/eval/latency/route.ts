@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { logEvalLatency, LatencyEvent, isResearchMode } from "@/src/eval/logger";
+import { logEvalLatency, LatencyEvent, isResearchMode } from "@/src/eval/analytics/logger";
 
 export async function POST(req: NextRequest) {
   if (!isResearchMode()) {

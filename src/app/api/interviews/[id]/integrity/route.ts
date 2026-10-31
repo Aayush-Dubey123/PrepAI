@@ -4,11 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { db } from "@/src/db/index";
 import { interviews } from "@/src/db/schema";
-import { IntegrityEventSchema, type IntegrityEvent } from "@/src/schemas/integrity";
-import { checkIntegrityLimit } from "@/src/lib/rate-limit";
+import { IntegrityEventSchema, type IntegrityEvent } from "@/src/schemas/practice/integrity";
+import { checkIntegrityLimit } from "@/src/lib/security/rate-limit";
 import { INTEGRITY_CONFIG } from "@/src/lib/integrity/config";
-import { logEvent } from "@/src/lib/audit";
-import "@/src/lib/config";
+import { logEvent } from "@/src/lib/security/audit";
+import "@/src/lib/core/config";
 
 /** Server-side dedup: key = interviewId + type + timestamp (ms, bucketed to nearest 2s) */
 const seenIntegrityEvents = new Map<string, number>();

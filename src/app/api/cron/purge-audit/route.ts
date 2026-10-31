@@ -3,7 +3,7 @@ import { lt, and, eq, sql } from "drizzle-orm";
 import { timingSafeEqual } from "crypto";
 import { db } from "@/src/db/index";
 import { auditEvents, drillSessions, masteryRetryQueue } from "@/src/db/schema";
-import { updateConceptMastery } from "@/src/lib/drills/mastery";
+import { updateConceptMastery } from "@/src/lib/drills/progression/mastery";
 
 function safeCompare(provided: string, expected: string): boolean {
   const bufA = Buffer.from(provided);

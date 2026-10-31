@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isResearchMode } from "@/src/eval/logger";
+import { isResearchMode } from "@/src/eval/analytics/logger";
 import fs from "fs";
 import path from "path";
 

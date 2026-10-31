@@ -201,50 +201,232 @@ Visit `http://localhost:3000` to access the application.
 
 ## 🧪 Test Suite & Verification
 
-Run the automated assertion test suites:
+Run the comprehensive automated test suite (18 test suites covering brain logic, follow-ups, rate limiting, phase verification, auth, audio, integrity, drills grading, mastery, seed validation, and live E2E integration):
 
 ```bash
-# 1. Run Answer Grounding & Signal Extraction Suite (28 tests)
-npx tsx --env-file=.env.local src/tests/answer-grounding.test.ts
+# Run all 18 test suites
+npm test
 
-# 2. Run Brain Policy & Repeat Guard Assertions (7 tests)
-npx tsx --env-file=.env.local src/tests/brain-step4.test.ts
+# Run TypeScript static type check
+npx tsc --noEmit
 
-# 3. Run Rate Limiter & Idempotency Suite (22 tests)
-npx tsx --env-file=.env.local src/tests/rate-limit.test.ts
+# Run ESLint validation
+npm run lint
 
-# 4. Run TypeScript Static Type Check
-npx tsc --noEmit --skipLibCheck
+# Run Next.js production build
+npm run build
+```
+
+Individual test suites can also be run directly:
+
+```bash
+# Brain Core Logic & Policy Assertions
+npx tsx src/tests/brain/brain.test.ts
+npx tsx src/tests/brain/brain-step4.test.ts
+
+# Answer Grounding & Signal Extraction
+npx tsx src/tests/interview/answer-grounding.test.ts
+
+# Security, Rate Limiting & Auth
+npx tsx src/tests/security/rate-limit.test.ts
+npx tsx src/tests/security/security.test.ts
+npx tsx src/tests/auth/analytics-auth.test.ts
+
+# Drills Engine (Grading, Mastery, Catalog Validation)
+npx tsx src/tests/drills/evaluation/drill-grading.test.ts
+npx tsx src/tests/drills/mastery/drill-mastery.test.ts
+npx tsx src/tests/drills/catalog/drill-seed-validation.test.ts
 ```
 
 ---
 
-## 📂 Project Directory Structure
+## 📂 Repository Structure and Organization Rules
+
+The repository follows a clean, modular, and maintainable folder structure designed for clarity, scalability, and seamless client handover.
+
+### Architectural Rule: Maximum Two Direct Files Per Ordinary Folder
+
+To eliminate folder clutter and keep the codebase structured:
+- **Every ordinary parent directory contains a maximum of two direct files** wherever reasonably achievable.
+- Larger collections of related files are logically partitioned into focused subdirectories by domain responsibility (e.g., `src/hooks/audio/`, `src/hooks/proctoring/`, `src/hooks/interview/`).
+- Shared domain modules expose clean public boundaries via centralized barrel index files where appropriate (e.g., `src/schemas/index.ts`, `src/hooks/index.ts`, `src/components/ui/index.ts`).
+
+### Justified Framework & Tooling Exceptions
+
+The two-file rule is strictly exempted for framework-mandated patterns to prevent tooling breakage:
+1. **Root Directory (`.`)**: Project-wide toolchain and build configuration files required by Next.js, TypeScript, ESLint, PostCSS, Drizzle, Docker, and Git (`package.json`, `tsconfig.json`, `next.config.ts`, `drizzle.config.ts`, `eslint.config.mjs`, `postcss.config.mjs`, `Dockerfile`, `.dockerignore`, `.env.example`, `AGENTS.md`, `README.md`).
+2. **Next.js App Router Segments (`src/app/`, `src/app/practice/`)**: Next.js reserved file conventions (`page.tsx`, `layout.tsx`, `loading.tsx`, `template.tsx`, `globals.css`).
+3. **Database Core (`src/db/`)**: Contains `index.ts`, `schema.ts`, and `vector.ts` (3 files) so that `schema.ts` remains directly bound to `drizzle.config.ts` without migration or Drizzle Studio path drift.
+4. **Drizzle Migration Journal (`src/db/drizzle/meta/`)**: Machine-generated migration snapshots and metadata managed by Drizzle ORM.
+5. **Public Root Browser Assets (`public/`)**: Browser-standard discovery assets (`apple-icon.png`, `favicon.ico`, `icon.svg`) that must reside at the root URL path for web clients.
+6. **Framework WASM Modules (`public/mediapipe/wasm/`)**: Pre-compiled binary WebAssembly modules loaded by MediaPipe Tasks Vision runtime.
+7. **Static Content Question Banks (`content/drills/<track>/`)**: Pre-authored question catalog JSON files partitioned by drill tracks (`algo-logic`, `behavioral-star`, `database-concurrency`, `frontend-arch`, `rapid-screen`, `system-design`).
+
+---
+
+### Complete Directory Architecture
 
 ```
-interview-ai/
-├── src/
-│   ├── app/                                # Next.js App Router
-│   │   ├── api/
-│   │   │   ├── dev/                        # Dev diagnostics & limit resets
-│   │   │   ├── interviews/                 # Turn, initialize, feedback, transcript
-│   │   │   ├── parse-resume/               # Magic-byte document extraction
-│   │   │   └── tts/                        # Sarvam AI Bulbul v3 proxy
-│   │   ├── interview/                      # Interview room & setup lobby UI
-│   │   ├── dashboard/                      # Candidate interview dashboard
-│   │   └── layout.tsx                      # Root layout with Clerk Auth
-│   ├── components/                         # UI components & upload flows
-│   ├── db/                                 # Drizzle schema & Postgres connection
-│   ├── lib/
-│   │   ├── integrity/                      # MediaPipe vision proctoring engine
-│   │   ├── interview/                      # Conversation state, prompt, brain config
-│   │   ├── llm/                            # Resilient multi-provider router & circuit breaker
-│   │   ├── gemini-embeddings.ts            # 768-dim pgvector embedding helpers
-│   │   └── rate-limit.ts                   # Sliding-window rate limiters & replay cache
-│   ├── schemas/                            # Zod schemas (brain, feedback, resume, transcript)
-│   └── tests/                              # Automated assertion test suites
+prepai/
+├── content/                                # Static drill content repositories
+│   └── drills/                             # Question banks partitioned by track
+│       ├── algo-logic/                     # Algorithm & data structure questions (.json)
+│       ├── behavioral-star/                # STAR method behavioral questions (.json)
+│       ├── database-concurrency/           # RDBMS, locking, & ACID questions (.json)
+│       ├── frontend-arch/                  # React & frontend systems questions (.json)
+│       ├── rapid-screen/                   # Fast-paced screening questions (.json)
+│       └── system-design/                  # High-scale architecture questions (.json)
+│
+├── public/                                 # Static public web assets
+│   ├── mediapipe/wasm/                     # MediaPipe vision binary WASM modules
+│   ├── apple-icon.png                      # Mobile touch icon
+│   ├── favicon.ico                         # Browser tab icon
+│   └── icon.svg                            # Application vector icon
+│
+├── scripts/                                # Maintenance, seeding & CLI scripts
+│   └── content/                            # Drill content lifecycle scripts
+│       ├── auditing/                       # Content quality audits & question generation
+│       ├── curation/                       # Review and approval workflows
+│       ├── seeding/                        # Database seeding & seed bank generators
+│       └── taxonomy/                       # Drill taxonomy & validation schemas
+│
+├── src/                                    # Application source code
+│   ├── app/                                # Next.js 16 App Router (routes & API handlers)
+│   │   ├── admin/                          # Admin dashboard & login gates
+│   │   ├── analytics/                      # Candidate metrics & performance view
+│   │   ├── api/                            # Backend REST & RPC API route handlers
+│   │   │   ├── admin/                      # Admin analytics & auth check
+│   │   │   ├── cron/                       # Scheduled background jobs (purge-audit)
+│   │   │   ├── dev/                        # Developer diagnostics & limit resets
+│   │   │   ├── drill-sessions/             # Drill interactive session lifecycle
+│   │   │   ├── drills/                     # Drill track catalog & sets
+│   │   │   ├── eval/                       # Latency benchmarks & audio recording
+│   │   │   ├── interviews/                 # Turn, initialize, prewarm, snapshot, feedback
+│   │   │   ├── parse-resume/               # Magic-byte multi-format document parser
+│   │   │   ├── tts/                        # Sarvam AI Bulbul v3 voice synthesis proxy
+│   │   │   └── user/                       # User analytics and profile endpoints
+│   │   ├── dashboard/                      # Candidate dashboard & past sessions
+│   │   ├── interview/                      # Interview room, lobby & feedback report
+│   │   ├── practice/                       # Practice Gym tracks & active player
+│   │   ├── sign-in/ & sign-up/             # Clerk authentication views
+│   │   ├── globals.css                     # Global Tailwind CSS styles
+│   │   ├── layout.tsx                      # Root HTML layout with Clerk Provider
+│   │   ├── page.tsx                        # Public landing page
+│   │   └── template.tsx                    # Page transition container
+│   │
+│   ├── components/                         # Modular React components
+│   │   ├── compliance/                     # Cookie consent and legal notices
+│   │   ├── dashboard/                      # Dashboard charts, metrics & history
+│   │   ├── gym/                            # Practice drill player & question renderers
+│   │   ├── interview-room/                 # Active interview room interface
+│   │   │   ├── chrome/                     # Header bar and integrity alert banner
+│   │   │   ├── controls/                   # Control buttons & transcript drawer
+│   │   │   ├── modals/                     # End interview confirmation modal
+│   │   │   └── tiles/                      # Candidate webcam & interviewer avatar tiles
+│   │   ├── lobby/                          # Hardware calibration lobby before interview
+│   │   │   ├── audio/                      # Speaker test & speech recognition check
+│   │   │   ├── hardware/                   # Camera calibration & microphone check
+│   │   │   └── status/                     # Readiness progress bar
+│   │   ├── navigation/                     # Global navigation header & progress bar
+│   │   ├── onboarding/                     # Resume upload and parsing flow
+│   │   ├── sidebar/                        # Collapsible application sidebar
+│   │   └── ui/                             # Reusable design system primitives
+│   │       ├── actions/                    # Button, Badge
+│   │       ├── containers/                 # Card, ProgressBar
+│   │       ├── feedback/                   # Toast, ToastProvider
+│   │       ├── forms/                      # Input, Textarea
+│   │       ├── loaders/                    # LatticeLoader, AudioVisualizer
+│   │       ├── overlays/                   # Dialog, Tabs
+│   │       ├── visuals/                    # Orb ambient lighting
+│   │       └── index.ts                    # Unified barrel export for UI components
+│   │
+│   ├── db/                                 # Database schema & Drizzle ORM client
+│   │   ├── drizzle/                        # Drizzle Kit migration files & journal
+│   │   ├── index.ts                        # PostgreSQL connection pool & Drizzle client
+│   │   ├── schema.ts                       # Database tables, enums & relational schema
+│   │   └── vector.ts                       # pgvector custom Drizzle type definition
+│   │
+│   ├── eval/                               # Latency benchmark and evaluation harnesses
+│   │   ├── analytics/                      # Evaluation logging & metrics collection
+│   │   ├── benchmarks/                     # Latency collector & report generator
+│   │   ├── exporters/                      # Question and conversation turn exporters
+│   │   └── reporting/                      # Formal viva documentation generator
+│   │
+│   ├── hooks/                              # Custom React subsystem hooks
+│   │   ├── audio/                          # useAudioPlayback, useSpeechInput
+│   │   ├── interview/                      # useTurnOrchestrator, useSilenceNudge
+│   │   ├── proctoring/                     # useIntegrityMonitor, useWebcamStream
+│   │   └── index.ts                        # Unified barrel export for hooks
+│   │
+│   ├── lib/                                # Domain logic and business services
+│   │   ├── ai/                             # Gemini pgvector 768-dim embeddings
+│   │   ├── analytics/                      # User analytics calculations
+│   │   ├── auth/                           # Admin authorization & role guards
+│   │   ├── core/                           # Environment config & shared utility helpers
+│   │   ├── documents/                      # PDF export & default interview plans
+│   │   ├── drills/                         # Practice Gym progression engine
+│   │   │   ├── evaluation/                 # Deterministic & LLM grading, scoring
+│   │   │   └── progression/                # Concept mastery EMA & smart set builder
+│   │   ├── integrity/                      # Vision proctoring detector & config
+│   │   ├── interview/                      # Interview state machine & knowledge base
+│   │   │   ├── config/                     # Brain configuration & K-Score weights
+│   │   │   ├── knowledge-base/             # Domain question taxonomies by discipline
+│   │   │   │   ├── architecture/           # System design & behavioral rubrics
+│   │   │   │   ├── domains/                # Frontend & backend domain tracks
+│   │   │   │   ├── engineering/            # Data science & software engineering tracks
+│   │   │   │   ├── general/                # HR general questions & common types
+│   │   │   │   └── index.ts                # Unified knowledge base registry
+│   │   │   └── orchestration/              # Adaptive prompt builder & state machine
+│   │   ├── llm/                            # Resilient multi-provider LLM routing
+│   │   │   ├── adapters/                   # Gemini & OpenAI-compatible adapters
+│   │   │   ├── core/                       # LLM router configuration & model definitions
+│   │   │   ├── providers/                  # OpenRouter integration & circuit breaker
+│   │   │   └── index.ts                    # Hedging LLM router entry point
+│   │   └── security/                       # Sliding-window rate limiters & audit logging
+│   │
+│   ├── schemas/                            # Zod schemas & runtime type contracts
+│   │   ├── candidate/                      # Resume & chat session schemas
+│   │   ├── evaluation/                     # Brain turn response & feedback schemas
+│   │   ├── interview/                      # Interview state & transcript schemas
+│   │   ├── practice/                       # Drill sessions & integrity schemas
+│   │   └── index.ts                        # Unified barrel export for all schemas
+│   │
+│   └── tests/                              # Automated test suites & test runner
+│       ├── audio/                          # Audio conversation & room UI smoke tests
+│       ├── auth/                           # Admin auth barriers & interview retention tests
+│       ├── brain/                          # Brain core logic & step 4 assertion tests
+│       ├── drills/                         # Practice Gym test suites
+│       │   ├── catalog/                    # Seed validation & targeted session tests
+│       │   ├── evaluation/                 # Drill grading & idempotency tests
+│       │   └── mastery/                    # Mastery EMA & smart set builder tests
+│       ├── e2e/                            # Live end-to-end integration test suite
+│       ├── integrity/                      # Proctoring debounce & cadence tests
+│       ├── interview/                      # Answer grounding & phase verification tests
+│       ├── security/                       # Rate limiting & security tests
+│       └── run-all.ts                      # Master test runner (npm test)
+│
 ├── drizzle.config.ts                       # Drizzle ORM configuration
-├── package.json                            # Dependencies and scripts
-└── README.md                               # Project documentation
+├── eslint.config.mjs                       # ESLint flat configuration
+├── next.config.ts                          # Next.js 16 configuration
+├── package.json                            # Project dependencies and npm scripts
+├── postcss.config.mjs                      # PostCSS / Tailwind CSS configuration
+├── tsconfig.json                           # TypeScript compiler configuration
+└── README.md                               # Repository documentation
 ```
-omp --resume 01a18fc2-d5a1-778c-b118-e203cef2c17a
+
+---
+
+### Developer Guide: Where to Add New Code
+
+| If you want to add... | Place files in... | Architectural Convention |
+|---|---|---|
+| **A new user-facing route or page** | `src/app/<feature>/page.tsx` | Use Next.js App Router conventions (`page.tsx`, `layout.tsx`, `loading.tsx`). |
+| **A new backend API endpoint** | `src/app/api/<feature>/route.ts` | Validate inputs with Zod (`src/schemas/`), protect with rate limiter (`src/lib/security/rate-limit.ts`). |
+| **New UI primitives or design widgets** | `src/components/ui/<category>/` | Max 2 files per folder (e.g. `Component.tsx`, `Component.types.ts`). Re-export in `src/components/ui/index.ts`. |
+| **A new domain feature component** | `src/components/<feature>/<subdomain>/` | Keep components small, focused, and grouped by responsibility. |
+| **A custom React hook** | `src/hooks/<domain>/` | Max 2 files per hook category. Re-export in `src/hooks/index.ts`. |
+| **New Zod validation schemas / contracts** | `src/schemas/<domain>/` | Group schemas by domain. Re-export in `src/schemas/index.ts`. |
+| **New business logic or AI orchestration** | `src/lib/<domain>/<subdomain>/` | Pure deterministic functions where possible; keep side effects isolated. |
+| **A new database table or enum** | `src/db/schema.ts` | Export table schema, then run `npm run db:generate` followed by `npm run db:push`. |
+| **A new automated test suite** | `src/tests/<subdomain>/<feature>.test.ts` | Add the suite to `testSuites` in `src/tests/run-all.ts` so `npm test` runs it. |
+| **A new drill topic or content bank** | `content/drills/<track>/` | Authored as JSON; validate with `npm run content:audit`. |

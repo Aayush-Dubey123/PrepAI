@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { LIVE_TURN_MODELS, HEAVY_TASK_MODELS, PROVIDERS } from "@/src/lib/llm/config";
-import { isOpen } from "@/src/lib/llm/circuit-breaker";
+import { LIVE_TURN_MODELS, HEAVY_TASK_MODELS, PROVIDERS } from "@/src/lib/llm/core/config";
+import { isOpen } from "@/src/lib/llm/providers/circuit-breaker";
 import { generate } from "@/src/lib/llm/index";
-import "@/src/lib/config";
+import "@/src/lib/core/config";
 
 export async function GET() {
   if (process.env.NODE_ENV === "production") {

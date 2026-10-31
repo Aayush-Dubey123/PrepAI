@@ -15,10 +15,10 @@ import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/src/db/index";
 import { interviews, resumes } from "@/src/db/schema";
-import { loadState, saveState, generateCoverageTopics } from "@/src/lib/interview/state";
-import { BRAIN_CONFIG } from "@/src/lib/interview/brain-config";
+import { loadState, saveState, generateCoverageTopics } from "@/src/lib/interview/orchestration/state";
+import { BRAIN_CONFIG } from "@/src/lib/interview/config/brain-config";
 import { generate } from "@/src/lib/llm/index";
-import type { ExtractedResume } from "@/src/schemas/resume";
+import type { ExtractedResume } from "@/src/schemas/candidate/resume";
 
 export async function POST(
   req: NextRequest,

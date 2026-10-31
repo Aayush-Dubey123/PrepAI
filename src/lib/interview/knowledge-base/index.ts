@@ -7,15 +7,15 @@
  *  - getKBEntry(): look up a topic by id
  */
 
-import type { KnowledgeTopicEntry, KnowledgeTrack } from "./types";
-import { SOFTWARE_ENGINEERING_KB } from "./software-engineering";
-import { BACKEND_KB } from "./backend";
-import { FRONTEND_KB } from "./frontend";
-import { SYSTEM_DESIGN_KB } from "./system-design";
-import { BEHAVIORAL_KB } from "./behavioral";
-import { DATA_SCIENCE_KB } from "./data-science";
-import { GENERIC_HR_KB } from "./generic-hr";
-import type { ExtractedResume } from "@/src/schemas/resume";
+import type { KnowledgeTopicEntry, KnowledgeTrack } from "./general/types";
+import { SOFTWARE_ENGINEERING_KB } from "./engineering/software-engineering";
+import { BACKEND_KB } from "./domains/backend";
+import { FRONTEND_KB } from "./domains/frontend";
+import { SYSTEM_DESIGN_KB } from "./architecture/system-design";
+import { BEHAVIORAL_KB } from "./architecture/behavioral";
+import { DATA_SCIENCE_KB } from "./engineering/data-science";
+import { GENERIC_HR_KB } from "./general/generic-hr";
+import type { ExtractedResume } from "@/src/schemas/candidate/resume";
 
 export type { KnowledgeTopicEntry, KnowledgeTrack };
 

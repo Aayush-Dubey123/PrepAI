@@ -13,8 +13,8 @@ import { ZodError } from "zod";
 import { after } from "next/server";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks } from "@/src/db/schema";
-import { embedText } from "@/src/lib/gemini-embeddings";
-import { AppendTranscriptSchema } from "@/src/schemas/transcript";
+import { embedText } from "@/src/lib/ai/gemini-embeddings";
+import { AppendTranscriptSchema } from "@/src/schemas/interview/transcript";
 
 export async function POST(request: Request) {
   try {

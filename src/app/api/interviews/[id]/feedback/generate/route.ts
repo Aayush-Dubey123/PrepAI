@@ -21,11 +21,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks } from "@/src/db/schema";
-import { FeedbackReportSchema, type FeedbackReport } from "@/src/schemas/feedback";
+import { FeedbackReportSchema, type FeedbackReport } from "@/src/schemas/evaluation/feedback";
 import { generate, tryParseAndValidate } from "@/src/lib/llm/index";
-import { loadState } from "@/src/lib/interview/state";
-import { logEvent } from "@/src/lib/audit";
-import type { ConversationState } from "@/src/schemas/brain";
+import { loadState } from "@/src/lib/interview/orchestration/state";
+import { logEvent } from "@/src/lib/security/audit";
+import type { ConversationState } from "@/src/schemas/evaluation/brain";
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_INSTRUCTION = `You are a senior hiring manager and technical interviewer writing the post-interview report for a
