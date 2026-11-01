@@ -74,8 +74,8 @@ export default function InterviewStagePage() {
 
   // Handle AI speech request from orchestrator
   const handleAiSpeakRequested = useCallback(
-    async (say: string) => {
-      await speakText(say);
+    async (say: string, onAudioStart?: () => void) => {
+      await speakText(say, onAudioStart);
     },
     [speakText]
   );

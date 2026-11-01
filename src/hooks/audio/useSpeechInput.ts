@@ -24,13 +24,13 @@ export interface SpeechRecognitionErrorEventLike {
   error: string;
   message?: string;
 }
+
 declare global {
   interface Window {
     SpeechRecognition?: new () => unknown;
     webkitSpeechRecognition?: new () => unknown;
   }
 }
-
 
 export interface UseSpeechInputOptions {
   onFinalTranscript: (text: string) => void;
@@ -48,7 +48,6 @@ export function useSpeechInput({
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [supportsSpeechRecognition, setSupportsSpeechRecognition] = useState<boolean>(false);
 
-  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTranscriptRef = useRef<string>("");
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const onBargeInRef = useRef(onBargeIn);
@@ -60,14 +59,6 @@ export function useSpeechInput({
   useEffect(() => {
     onBargeInRef.current = onBargeIn;
   }, [onBargeIn]);
-
-  useEffect(() => {
-    return () => {
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -88,17 +79,9 @@ export function useSpeechInput({
   }, [isListening]);
 
   const stopListening = useCallback(() => {
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
-
     const pendingText = lastTranscriptRef.current.trim();
-    if (pendingText.length > 0) {
-      lastTranscriptRef.current = "";
-      setInterimTranscript("");
-      onFinalTranscriptRef.current(pendingText);
-    }
+    lastTranscriptRef.current = "";
+    setInterimTranscript("");
 
     if (recognitionRef.current) {
       try {
@@ -108,6 +91,10 @@ export function useSpeechInput({
     }
     setIsListening(false);
     isListeningRef.current = false;
+
+    if (pendingText.length > 0) {
+      onFinalTranscriptRef.current(pendingText);
+    }
   }, []);
 
   const startListening = useCallback(() => {
@@ -123,10 +110,6 @@ export function useSpeechInput({
 
     if (isListeningRef.current) return;
 
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
     lastTranscriptRef.current = "";
 
     // Barge-in: Stop active AI speech immediately
@@ -139,6 +122,7 @@ export function useSpeechInput({
       } catch {}
       recognitionRef.current = null;
     }
+
     interface ActiveRecognition {
       continuous: boolean;
       interimResults: boolean;
@@ -153,7 +137,8 @@ export function useSpeechInput({
     }
 
     const recognition = new SpeechRecognitionClass() as unknown as ActiveRecognition;
-    recognition.continuous = true;
+    // Exact to commit 10e50d9: continuous = false for snappy single-utterance submission
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
@@ -165,50 +150,33 @@ export function useSpeechInput({
       setTranscriptError(null);
     };
 
-    let accumulatedFinal = "";
-
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-        silenceTimeoutRef.current = null;
-      }
-
       const { resultIndex, results } = event;
-      let interim = "";
+      const currentResult = results[resultIndex];
 
-      for (let i = resultIndex; i < results.length; i++) {
-        const item = results[i];
-        if (item?.[0]?.transcript?.trim()) {
+      if (currentResult?.isFinal) {
+        const finalText = (currentResult[0]?.transcript || "").trim();
+        lastTranscriptRef.current = "";
+        setInterimTranscript("");
+        setIsListening(false);
+        isListeningRef.current = false;
+        if (finalText.length > 0) {
+          onFinalTranscriptRef.current(finalText);
+        }
+      } else if (currentResult?.[0]) {
+        const text = currentResult[0].transcript;
+        lastTranscriptRef.current = text;
+        setInterimTranscript(text);
+        if (text.trim().length > 0) {
           onBargeInRef.current?.();
         }
-        if (item?.isFinal) {
-          accumulatedFinal += (item[0]?.transcript || "") + " ";
-        } else if (item?.[0]) {
-          interim += item[0].transcript;
-        }
-      }
-
-      const fullText = (accumulatedFinal + interim).trim();
-      lastTranscriptRef.current = fullText;
-      setInterimTranscript(fullText);
-
-      if (fullText.length > 0) {
-        silenceTimeoutRef.current = setTimeout(() => {
-          const submittedText = lastTranscriptRef.current.trim();
-          if (submittedText.length > 0) {
-            lastTranscriptRef.current = "";
-            setInterimTranscript("");
-            stopListeningRef.current();
-            onFinalTranscriptRef.current(submittedText);
-          }
-        }, 1500);
       }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       console.warn("[SPEECH INPUT] Error:", event.error);
 
-      // Transient no-speech pause: user paused thinking; do not kill recognition or show alarming red banner
+      // Transient no-speech pause: candidate paused thinking; do not kill recognition or show alarming red banner
       if (event.error === "no-speech" || event.error === "aborted") {
         return;
       }
@@ -230,10 +198,6 @@ export function useSpeechInput({
       isListeningRef.current = false;
       const pendingText = lastTranscriptRef.current.trim();
       if (pendingText.length > 0) {
-        if (silenceTimeoutRef.current) {
-          clearTimeout(silenceTimeoutRef.current);
-          silenceTimeoutRef.current = null;
-        }
         lastTranscriptRef.current = "";
         setInterimTranscript("");
         onFinalTranscriptRef.current(pendingText);
@@ -255,7 +219,7 @@ export function useSpeechInput({
     stopListeningRef.current = stopListening;
   }, [startListening, stopListening]);
 
-  // Global [M] keyboard shortcut
+  // Global [M] keyboard shortcut (exact to commit 10e50d9)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {

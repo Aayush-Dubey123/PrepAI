@@ -52,7 +52,7 @@ export type TurnState = "idle" | "ai_speaking" | "user_turn" | "processing";
 
 export interface UseTurnOrchestratorOptions {
   interviewId: string;
-  onAiSpeakRequested: (say: string) => Promise<void>;
+  onAiSpeakRequested: (say: string, onAudioStart?: () => void) => Promise<void>;
   onStopAiSpeech: () => void;
   mediaStream: MediaStream | null;
 }
@@ -109,7 +109,7 @@ export function useTurnOrchestrator({
     [interviewId, transcript.length]
   );
 
-  // Append transcript chunk
+  // Append transcript chunk (exact to commit 10e50d9)
   const appendTranscript = useCallback(
     async (content: string, speaker: "user" | "ai"): Promise<TranscriptEntry> => {
       if (!interviewId) {
@@ -117,6 +117,8 @@ export function useTurnOrchestrator({
       }
 
       const payload = { interviewId, content, speaker };
+      console.log("[TRANSCRIPT APPEND] Payload:", payload);
+
       const response = await fetch("/api/interviews/transcript/append", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,40 +126,27 @@ export function useTurnOrchestrator({
       });
 
       const data = await response.json();
+      console.log("[TRANSCRIPT APPEND] Response:", data);
+
       if (!response.ok) {
         throw new Error(
-          typeof data.error === "string" ? data.error : "Failed to append transcript"
+          typeof data.error === "string" ? data.error : "Failed to persist transcript"
         );
       }
 
-      const entry: TranscriptEntry = {
-        id: data.chunk?.id || `${Date.now()}`,
-        speaker,
-        text: content,
-        timestamp: new Date(),
-      };
-
-      setTranscript((prev) => {
-        const optimisticIndex = prev.findIndex(
-          (e) => (e.id.startsWith("u-") || e.id.startsWith("ai-")) && e.speaker === speaker && e.text === content
-        );
-        if (optimisticIndex !== -1) {
-          const next = [...prev];
-          next[optimisticIndex] = entry;
-          return next;
-        }
-        return [...prev, entry];
-      });
+      const entry = mapChunkToEntry(data as TranscriptChunkRecord);
+      setTranscript((prev) => [...prev, entry]);
       return entry;
     },
     [interviewId]
   );
 
-  // End interview session gracefully
+  // End interview session gracefully (exact to commit 10e50d9)
   const endSession = useCallback(
     async (reason: "manual" | "natural" | "integrity" | "cap_reached" = "natural") => {
       if (isEndingRef.current) return;
       isEndingRef.current = true;
+      console.log(`[END_SESSION] Terminating interview session (${reason}) for ${interviewId}`);
 
       onStopAiSpeech();
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -173,21 +162,52 @@ export function useTurnOrchestrator({
       setCurrentPhase("closed");
 
       try {
-        await fetch(`/api/interviews/${interviewId}/feedback`, {
+        fetch(`/api/interviews/${interviewId}/feedback/generate`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason }),
-        });
-      } catch (err) {
-        console.warn("[END_SESSION] Feedback generate call failed:", err);
-      }
+        }).catch((e) => console.warn("[END_SESSION] Feedback trigger error:", e));
+      } catch {}
 
       router.push(`/interview/${interviewId}/feedback`);
     },
     [interviewId, mediaStream, onStopAiSpeech, router]
   );
 
-  // Execute turn
+  // speakAiQuestion (exact to commit 10e50d9): Synchronizes audio playback with transcript display
+  const speakAiQuestion = useCallback(
+    async (questionText: string) => {
+      console.log("[SPEAK AI] Question text:", questionText);
+      if (!questionText || questionText.trim().length === 0) {
+        console.error("[SPEAK AI] Empty question text provided");
+        return;
+      }
+
+      setTurnState("ai_speaking");
+      let textAppended = false;
+
+      const triggerTextDisplay = async () => {
+        if (!textAppended) {
+          textAppended = true;
+          setIsAiThinking(false);
+          await appendTranscript(questionText, "ai");
+        }
+      };
+
+      try {
+        await onAiSpeakRequested(questionText, () => {
+          void triggerTextDisplay();
+        });
+        await triggerTextDisplay();
+      } catch (error) {
+        console.warn("[SPEAK AI] Audio playback error, falling back to text display:", error);
+        await triggerTextDisplay();
+      } finally {
+        setTurnState("user_turn");
+      }
+    },
+    [appendTranscript, onAiSpeakRequested]
+  );
+
+  // Execute turn (exact to commit 10e50d9)
   const callTurn = useCallback(
     async (
       userUtterance: string,
@@ -218,6 +238,8 @@ export function useTurnOrchestrator({
       }));
 
       const payload = { userUtterance, recentTranscript, clientRequestId };
+      console.log("[TURN] Calling /turn, reqId:", clientRequestId, "utterance:", userUtterance.slice(0, 80));
+
       const attemptFetch = async () =>
         fetch(`/api/interviews/${interviewId}/turn`, {
           method: "POST",
@@ -227,19 +249,23 @@ export function useTurnOrchestrator({
 
       try {
         let response = await attemptFetch();
+        console.log("[TURN] Response status:", response.status);
 
         if (response.status === 429) {
           const data = (await response.json().catch(() => ({}))) as {
             retryAfterSec?: number;
           };
           const waitSec = data.retryAfterSec ?? 5;
+          console.warn(`[TURN] 429 — retrying in ${waitSec}s (answer preserved)`);
           setTranscriptError(`One moment — retrying in ${waitSec}s…`);
           await new Promise((r) => setTimeout(r, waitSec * 1000));
           setTranscriptError(null);
           response = await attemptFetch();
+          console.log("[TURN] Retry response status:", response.status);
         }
 
         if (response.status === 409) {
+          console.log("[TURN] Interview already ended on server (409). Navigating to feedback report.");
           setIsAiThinking(false);
           setCurrentPhase("closing");
           await endSession("natural");
@@ -252,31 +278,17 @@ export function useTurnOrchestrator({
         }
 
         const turnResp = (await response.json()) as TurnResponse;
+        console.log("[TURN] Response:", turnResp);
+
         setCurrentPhase(turnResp.phase);
         if (turnResp._dev?.provider) setAiProvider(turnResp._dev.provider);
 
         setIsAiThinking(false);
 
-        const aiEntry: TranscriptEntry = {
-          id: `ai-${Date.now()}`,
-          speaker: "ai",
-          text: turnResp.say,
-          timestamp: new Date(),
-        };
-        setTranscript((prev) => [...prev, aiEntry]);
-        void appendTranscript(turnResp.say, "ai").catch((e) =>
-          console.warn("[TRANSCRIPT] AI append failed:", e)
-        );
-
         if (turnResp.isComplete) {
           await endSession("natural");
         } else {
-          setTurnState("ai_speaking");
-          try {
-            await onAiSpeakRequested(turnResp.say);
-          } finally {
-            setTurnState("user_turn");
-          }
+          await speakAiQuestion(turnResp.say);
         }
       } catch (error) {
         console.error("[TURN] Error:", error);
@@ -287,10 +299,10 @@ export function useTurnOrchestrator({
         isAttemptingOrchestratorRef.current = false;
       }
     },
-    [interviewId, onAiSpeakRequested, endSession, appendTranscript]
+    [interviewId, endSession, speakAiQuestion]
   );
 
-  // Submit candidate answer
+  // Submit candidate answer (exact to commit 10e50d9)
   const submitAnswer = useCallback(
     async (text?: string) => {
       const finalText = (text || userInput).trim();
@@ -302,19 +314,10 @@ export function useTurnOrchestrator({
       setTranscriptError(null);
       setTurnState("processing");
 
-      const localUserEntry: TranscriptEntry = {
-        id: `u-${Date.now()}`,
-        speaker: "user",
-        text: finalText,
-        timestamp: new Date(),
-      };
-      setTranscript((prev) => [...prev, localUserEntry]);
-      void appendTranscript(finalText, "user").catch((e) =>
-        console.warn("[TRANSCRIPT] user append failed:", e)
-      );
-
       try {
-        await callTurn(finalText, [...transcript, localUserEntry]);
+        const newEntry = await appendTranscript(finalText, "user");
+        const updatedTranscript = [...transcript, newEntry];
+        await callTurn(finalText, updatedTranscript);
       } catch (error) {
         setTranscriptError(
           error instanceof Error
@@ -327,7 +330,7 @@ export function useTurnOrchestrator({
     [userInput, turnState, onStopAiSpeech, sendClientLatencyLog, appendTranscript, transcript, callTurn]
   );
 
-  // Load session on mount
+  // Load session on mount (exact to commit 10e50d9)
   useEffect(() => {
     if (!interviewId) return;
 
@@ -347,10 +350,14 @@ export function useTurnOrchestrator({
       setTurnState("processing");
       setTranscriptError(null);
 
+      console.log("[LOAD SESSION] Loading interview:", interviewId);
+
       try {
         const response = await fetch(
           `/api/interviews/transcript?interviewId=${interviewId}`
         );
+
+        console.log("[LOAD SESSION] Response status:", response.status);
 
         if (response.status === 404) {
           throw new Error("Interview not found. Please start a new interview.");
@@ -368,6 +375,8 @@ export function useTurnOrchestrator({
         const interview = data.interview as InterviewRecord;
         const chunks = (data.chunks ?? []) as TranscriptChunkRecord[];
 
+        console.log("[LOAD SESSION] Loaded interview:", interview.id, "Phase:", interview.currentPhase);
+
         setJobRole(interview?.jobRole ?? "Software Developer");
         setCurrentPhase(interview?.currentPhase || "intro");
         setCandidateProfile(interview?.feedback?.candidateProfile || null);
@@ -375,24 +384,15 @@ export function useTurnOrchestrator({
         const entries = chunks.map(mapChunkToEntry);
         setTranscript(entries);
 
+        // Derive state strictly from saved transcript data (exact commit 10e50d9)
         if (entries.length === 0) {
           const firstName =
             interview?.feedback?.candidateProfile?.fullName?.split(" ")[0] || "there";
-          const role = interview?.jobRole || "Software Developer";
-          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today for your ${role} interview. To get started, could you briefly introduce yourself and share a bit about your technical background and recent projects?`;
-          hasPlayedInitialGreetingRef.current = true;
-          const entry: TranscriptEntry = {
-            id: `${Date.now()}`,
-            speaker: "ai",
-            text: defaultGreeting,
-            timestamp: new Date(),
-          };
-          setTranscript([entry]);
-          void appendTranscript(defaultGreeting, "ai");
-          setTurnState("ai_speaking");
-          try {
-            await onAiSpeakRequested(defaultGreeting);
-          } finally {
+          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today. Before we begin, is there anything you'd like to check on your end — audio, video, anything like that?`;
+          if (!hasPlayedInitialGreetingRef.current) {
+            hasPlayedInitialGreetingRef.current = true;
+            await speakAiQuestion(defaultGreeting);
+          } else {
             setTurnState("user_turn");
           }
           return;
@@ -412,8 +412,9 @@ export function useTurnOrchestrator({
           }
         } else {
           setTurnState("processing");
+          const lastUserUtterance = lastEntry.text;
           const resumeReqId = `${interviewId}_resume_${entries.length}`;
-          void callTurn(lastEntry.text, entries, resumeReqId);
+          void callTurn(lastUserUtterance, entries, resumeReqId);
         }
       } catch (error) {
         if (!cancelled) {
@@ -433,7 +434,7 @@ export function useTurnOrchestrator({
     return () => {
       cancelled = true;
     };
-  }, [interviewId, router, onAiSpeakRequested, callTurn]);
+  }, [interviewId, router, onAiSpeakRequested, callTurn, speakAiQuestion]);
 
   // Session duration timer
   useEffect(() => {
