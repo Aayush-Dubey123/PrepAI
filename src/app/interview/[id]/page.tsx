@@ -250,6 +250,44 @@ export default function InterviewStagePage() {
       void orchestrator.submitAnswer("I have completed my answer. Let's move to the next part.");
     }
   };
+
+  // Keyboard shortcut for mic (M key) from commit 10e50d9 — uses refs to avoid stale closures
+  const isListeningRef = useRef(false);
+  const turnStateRef = useRef(orchestrator.turnState);
+  const handleToggleMicRef = useRef(handleToggleMic);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
+
+  useEffect(() => {
+    turnStateRef.current = orchestrator.turnState;
+  }, [orchestrator.turnState]);
+
+  useEffect(() => {
+    handleToggleMicRef.current = handleToggleMic;
+  }, [handleToggleMic]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        if (turnStateRef.current === "processing") {
+          return;
+        }
+        handleToggleMicRef.current();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   const handleConfirmEndInterview = async () => {
     setIsEndingSession(true);
     await orchestrator.endSession("manual");
