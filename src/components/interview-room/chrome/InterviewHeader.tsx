@@ -90,7 +90,7 @@ export function InterviewHeader({
             type="button"
             onClick={onToggleFullscreen}
             title={isFullscreen ? "Exit Fullscreen (Esc)" : "Enter Fullscreen Proctoring Mode"}
-            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
               isFullscreen
                 ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
                 : "bg-white border-[#e2e8f0] text-[#475569] hover:text-[#0f172a] hover:bg-slate-50"
@@ -119,12 +119,13 @@ export function InterviewHeader({
               }
             }}
             title="Fullscreen is unavailable in this browser environment or iframe. You can continue your interview normally."
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#e2e8f0] bg-slate-50 text-[#94a3b8] text-xs font-medium cursor-help opacity-85 hover:opacity-100"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#e2e8f0] bg-slate-50 text-[#94a3b8] text-xs font-medium cursor-help opacity-85 hover:opacity-100"
           >
             <Lock className="w-3.5 h-3.5 text-slate-400" />
             <span className="hidden md:inline">Fullscreen Locked</span>
           </button>
         )}
+
         {/* Proctoring Strikes */}
         {strikes > 0 ? (
           <Badge variant="error" pulse className="gap-1 text-xs">
@@ -146,7 +147,7 @@ export function InterviewHeader({
           onClick={onEndCall}
           className="gap-1.5 text-xs font-semibold h-8 bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100"
         >
-          <PhoneOff className="w-3.5 h-3.5" />
+          <PhoneOff className="w-4 h-4" />
           <span className="hidden sm:inline">End Call</span>
         </Button>
       </div>

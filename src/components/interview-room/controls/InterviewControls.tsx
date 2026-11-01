@@ -73,16 +73,18 @@ export function InterviewControls({
         {/* Mic / Push to Talk */}
         {supportsSpeechRecognition ? (
           <Button
-            variant={isListening ? "glow" : isAiSpeaking ? "secondary" : "glow"}
+            variant={isListening ? "danger" : isAiSpeaking ? "secondary" : "glow"}
             size="md"
             disabled={isProcessing}
             onClick={onToggleMic}
             className={`h-10 px-3 sm:h-11 sm:px-4 gap-1.5 sm:gap-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 pointer-events-auto cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               isListening
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20"
+                ? "bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/25"
                 : isAiSpeaking
                 ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
-                : "bg-[#4f46e5] hover:bg-[#4338ca] text-white shadow-md shadow-indigo-500/20"
+                : isProcessing
+                ? "bg-slate-100 text-slate-400 border border-slate-200"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/25"
             }`}
           >
             {isListening ? (
@@ -97,13 +99,13 @@ export function InterviewControls({
               </>
             ) : isProcessing ? (
               <>
-                <Sparkles className="w-4 h-4 animate-spin text-purple-300" />
+                <Sparkles className="w-4 h-4 animate-spin text-purple-400" />
                 <span>Evaluating...</span>
               </>
             ) : (
               <>
                 <Mic className="w-4 h-4 text-white" />
-                <span>Unmute & Speak <span className="hidden sm:inline">[M]</span></span>
+                <span>Unmute Mic <span className="hidden sm:inline">[M]</span></span>
               </>
             )}
           </Button>

@@ -31,19 +31,49 @@ export default function InterviewStagePage() {
 
   useEffect(() => {
     if (typeof document !== "undefined") {
+      const doc = document as unknown as {
+        fullscreenEnabled?: boolean;
+        webkitFullscreenEnabled?: boolean;
+        mozFullScreenEnabled?: boolean;
+        msFullscreenEnabled?: boolean;
+        fullscreenElement?: Element;
+        webkitFullscreenElement?: Element;
+        mozFullScreenElement?: Element;
+        msFullscreenElement?: Element;
+      };
+
       const supported = Boolean(
-        document.fullscreenEnabled ||
-          (document as unknown as { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled
+        doc.fullscreenEnabled ||
+        doc.webkitFullscreenEnabled ||
+        doc.mozFullScreenEnabled ||
+        doc.msFullscreenEnabled
       );
       setIsFullscreenSupported(supported);
 
       const handleFullscreenChange = () => {
-        setIsFullscreen(Boolean(document.fullscreenElement));
+        const docObj = document as unknown as {
+          fullscreenElement?: Element;
+          webkitFullscreenElement?: Element;
+          mozFullScreenElement?: Element;
+          msFullscreenElement?: Element;
+        };
+        setIsFullscreen(Boolean(
+          docObj.fullscreenElement ||
+          docObj.webkitFullscreenElement ||
+          docObj.mozFullScreenElement ||
+          docObj.msFullscreenElement
+        ));
       };
 
       document.addEventListener("fullscreenchange", handleFullscreenChange);
+      document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+      document.addEventListener("MSFullscreenChange", handleFullscreenChange);
       return () => {
         document.removeEventListener("fullscreenchange", handleFullscreenChange);
+        document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+        document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+        document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
       };
     }
   }, []);
@@ -51,10 +81,50 @@ export default function InterviewStagePage() {
   const handleToggleFullscreen = async () => {
     if (typeof document === "undefined") return;
     try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
+      const doc = document as unknown as {
+        fullscreenElement?: Element;
+        webkitFullscreenElement?: Element;
+        mozFullScreenElement?: Element;
+        msFullscreenElement?: Element;
+        exitFullscreen?: () => Promise<void>;
+        webkitExitFullscreen?: () => Promise<void>;
+        mozCancelFullScreen?: () => Promise<void>;
+        msExitFullscreen?: () => Promise<void>;
+      };
+      const docEl = document.documentElement as unknown as {
+        requestFullscreen?: () => Promise<void>;
+        webkitRequestFullscreen?: () => Promise<void>;
+        mozRequestFullScreen?: () => Promise<void>;
+        msRequestFullscreen?: () => Promise<void>;
+      };
+
+      const isFs = Boolean(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+      );
+
+      if (!isFs) {
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen();
+        } else if (docEl.mozRequestFullScreen) {
+          await docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          await docEl.msRequestFullscreen();
+        }
       } else {
-        await document.exitFullscreen();
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.mozCancelFullScreen) {
+          await doc.mozCancelFullScreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
+        }
       }
     } catch (err) {
       console.warn("[FULLSCREEN] Toggle failed or blocked by policy:", err);
