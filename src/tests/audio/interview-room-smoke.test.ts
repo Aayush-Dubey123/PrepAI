@@ -59,7 +59,7 @@ console.log("▶ Test 2: InterviewerTile in 'user_turn' state (Candidate Answeri
     React.createElement(InterviewerTile, {
       turnState: "user_turn",
       isAiThinking: false,
-      aiProvider: "gemini (gemini-3.8-flash)",
+      aiProvider: "gemini (gemini-3.5-flash-lite)",
       currentPrompt: activeQuestion,
       currentPhase: "core",
     })

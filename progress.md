@@ -41,7 +41,7 @@
 - **Zero-Latency Turn Routing**: Runtime turn endpoints perform zero topic selection overhead, executing directly against pre-computed states.
 
 ### Phase 4: Free-Tier LLM Provider Pool & Quota Safeguards
-- **Provider Hedging**: Automatic failover across Groq (`gpt-oss-20b`, `qwen3.8-27b`), Gemini (`gemini-3.8-flash`, `gemini-3.5-flash-lite`), and OpenRouter (`llama-3.3-70b-instruct:free`).
+- **Provider Hedging**: Automatic failover across Groq (`gpt-oss-20b`, `qwen3.8-27b`), Gemini (`gemini-3.5-flash-lite`, `gemini-3.5-flash`), and OpenRouter (`llama-3.3-70b-instruct:free`).
 - **Cerebras Elimination**: Removed Cerebras completely due to 30-day credit expiration and mandatory credit card verification.
 - **OpenRouter Free Tier Guard**: Automatic tracking enforcing the 50 req/day free tier quota with model rotation.
 

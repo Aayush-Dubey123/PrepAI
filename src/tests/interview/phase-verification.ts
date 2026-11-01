@@ -314,7 +314,7 @@ async function runPhase5Tests() {
       history.push(score);
       const depth = computeTargetDepth(kScore, update.kScoreTrend, t + 1);
       const simulatedLatency = 350 + Math.floor(Math.sin(t) * 120);
-      const provider = t % 2 === 0 ? "groq (gpt-oss-20b)" : "gemini (gemini-3.8-flash)";
+      const provider = t % 2 === 0 ? "groq (gpt-oss-20b)" : "gemini (gemini-3.5-flash-lite)";
 
       console.log(`  Turn ${t + 1}: Score=${score}/10 | K-Score=${kScore.toFixed(2)} (${update.kScoreTrend}) | Target Depth=${depth.toUpperCase()} | Latency=${simulatedLatency}ms | Provider=${provider}`);
     }

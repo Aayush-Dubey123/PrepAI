@@ -10,6 +10,7 @@
  *   and undergoing restructuring as of September 2026. Left out of the active pool for now.
  * - GROQ: ACTIVE. True free tier (no credit card required). Fast inference for live turns.
  * - GEMINI: ACTIVE. True free tier (no credit card required). Large context window (1M tokens).
+ *   Active primary model is configured via GEMINI_MODEL (default: gemini-3.5-flash-lite).
  * - OPENROUTER: ACTIVE (Secondary / Overflow). Free models ending in ":free". Capped at 20 RPM / 50 RPD.
  */
 
@@ -58,6 +59,8 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
 
 // ─── Models (verified against live endpoints) ────────────────────────────────
 
+export const ACTIVE_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+
 /** Fast models for live turns (orchestrator): Groq -> Gemini -> OpenRouter */
 export const LIVE_TURN_MODELS: ModelConfig[] = [
   // Primary: Groq (ultra fast TTFT ~140-500ms)
@@ -65,21 +68,18 @@ export const LIVE_TURN_MODELS: ModelConfig[] = [
   // Fast Groq alternative (blazing fast ~140ms)
   { id: "qwen/qwen3.8-27b",                         provider: "groq",       contextTokens: 32768,   tps: 200, jsonMode: true },
   // Primary Gemini hedge (fast lite ~700ms, NO 503 high-demand spikes)
-  { id: "gemini-3.5-flash-lite",                    provider: "gemini",     contextTokens: 1048576, tps: 200, jsonMode: true },
+  { id: ACTIVE_GEMINI_MODEL,                        provider: "gemini",     contextTokens: 1048576, tps: 200, jsonMode: true },
   // Secondary Gemini hedge
   { id: "gemini-3.5-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
-  // Gemini 3.8 flash (subject to 503 high-demand spikes on free tier)
-  { id: "gemini-3.8-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
   // Fallback: OpenRouter free tier (overflow)
   { id: "meta-llama/llama-3.3-70b-instruct:free",   provider: "openrouter", contextTokens: 16384,   tps: 80,  jsonMode: true },
 ];
 
 /** Heavy models for resume parse, plan, feedback: Gemini -> Groq -> OpenRouter */
 export const HEAVY_TASK_MODELS: ModelConfig[] = [
-  { id: "gemini-3.5-flash-lite",                    provider: "gemini",     contextTokens: 1048576, tps: 200, jsonMode: true },
+  { id: ACTIVE_GEMINI_MODEL,                        provider: "gemini",     contextTokens: 1048576, tps: 200, jsonMode: true },
   { id: "gemini-3.5-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
   { id: "openai/gpt-oss-120b",                      provider: "groq",       contextTokens: 16384,   tps: 100, jsonMode: true },
-  { id: "gemini-3.8-flash",                         provider: "gemini",     contextTokens: 1048576, tps: 150, jsonMode: true },
   { id: "meta-llama/llama-3.3-70b-instruct:free",   provider: "openrouter", contextTokens: 16384,   tps: 80,  jsonMode: true },
 ];
 

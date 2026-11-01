@@ -460,7 +460,7 @@ export async function POST(
       interviewId,
       type: "turn",
       meta: {
-        model: llmResponse ? (provider === "gemini" ? "gemini-3.8-flash" : "groq") : "none",
+        model: llmResponse ? (provider === "gemini" ? (process.env.GEMINI_MODEL || "gemini-3.5-flash-lite") : "groq") : "none",
         provider,
         latencyMs: totalLatencyMs,
         intent: finalIntent,

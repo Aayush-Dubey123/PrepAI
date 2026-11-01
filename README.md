@@ -67,7 +67,7 @@ The system conducts realistic, adaptive technical interviews that evaluate candi
   - **Pure State Updates**: State transitions (`activateNextTopic`, `closeActiveTopic`) are idempotent pure functions.
 
 ### 2. 🛡️ Resilient Multi-Provider LLM Routing Engine (`src/lib/llm`)
-- **Cross-Provider Hedging (`generateWithHedging`)**: Dispatches live candidate turns to primary fast models (Groq `openai/gpt-oss-20b`); if no response within `1500ms`, simultaneously fires a race request to Gemini (`gemini-3.8-flash`). Fastest valid response wins.
+- **Cross-Provider Hedging (`generateWithHedging`)**: Dispatches live candidate turns to primary fast models (Groq `openai/gpt-oss-20b`); if no response within `1500ms`, simultaneously fires a race request to Gemini (`gemini-3.5-flash-lite`). Fastest valid response wins.
 - **In-Memory Circuit Breaker (`src/lib/llm/circuit-breaker.ts`)**: Automatically trips open for 5 minutes after 2 consecutive failures per model/provider to prevent cascade latency.
 - **Fallback Question Bank**: Multi-phrasing deterministic fallback question bank ensuring interviews continue smoothly even if all external LLM APIs experience an outage.
 - **Non-Crashing Bootstrapping**: Formatted startup registry table prints active/disabled providers without crashing on missing secondary keys.
