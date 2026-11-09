@@ -13,7 +13,7 @@ import { ZodError } from "zod";
 import { after } from "next/server";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks } from "@/src/db/schema";
-import { embedText } from "@/src/lib/ai/gemini-embeddings";
+import { embedTextCached } from "@/src/lib/ai/embedding-cache";
 import { AppendTranscriptSchema } from "@/src/schemas/interview/transcript";
 
 export async function POST(request: Request) {
@@ -73,7 +73,8 @@ export async function POST(request: Request) {
     // Fire-and-forget: compute embedding and update the row after response is sent
     after(async () => {
       try {
-        const values = await embedText(body.content);
+        // Shared with /turn's memory lookup: the same answer text is embedded only once.
+        const values = await embedTextCached(body.content);
         await db
           .update(transcriptChunks)
           .set({ embedding: values })

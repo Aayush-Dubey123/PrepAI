@@ -55,8 +55,12 @@ import { getKBEntry } from "@/src/lib/interview/knowledge-base/index";
 import { logEvalLatency } from "@/src/eval/analytics/logger";
 import { logEvent } from "@/src/lib/security/audit";
 import { getInFlightTurn, trackTurn, waitForRemoteTurn } from "@/src/lib/interview/orchestration/turn-inflight";
+import { embedTextCached } from "@/src/lib/ai/embedding-cache";
+import { recallEarlierAnswers, type RecalledAnswer } from "@/src/lib/interview/memory/recall";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
+// Longest the turn waits for memory before calling the LLM without it (env-tunable).
+const MEMORY_WAIT_MS = Number(process.env.MEMORY_WAIT_MS) || 450;
 
 /**
  * Idempotency wrapper. A request carrying a clientRequestId that is already being processed
@@ -117,6 +121,17 @@ async function handleTurn(
     }
 
     const body = TurnRequestSchema.parse(await req.json());
+
+    // Interview memory: start embedding the answer now so it overlaps with the DB load and
+    // turn setup below. Short replies ("yes", "okay") carry no claim worth recalling.
+    const memoryEnabled =
+      process.env.INTERVIEW_MEMORY !== "false" && body.userUtterance.trim().split(/\s+/).length >= 6;
+    const answerEmbedding = memoryEnabled
+      ? embedTextCached(body.userUtterance).catch((err: unknown) => {
+          console.warn("[TURN] memory: embedding failed:", err instanceof Error ? err.message : err);
+          return null;
+        })
+      : Promise.resolve(null);
 
     // ── 2. Load interview + server state ─────────────────────────────────────
     const [interview] = await db
@@ -257,6 +272,39 @@ async function handleTurn(
       ? getOpeningTemplate(currentState.conversationSeed ?? 0)
       : undefined;
 
+    // ── 8b. Interview memory (pgvector) — strictly time-boxed ────────────────
+    let earlierAnswers: RecalledAnswer[] = [];
+    if (memoryEnabled && (currentState.phase === "core" || currentState.phase === "wrapup")) {
+      const memStart = Date.now();
+      const recall = answerEmbedding
+        .then((embedding) =>
+          embedding
+            ? recallEarlierAnswers(interviewId, embedding, {
+                exclude: [...body.recentTranscript.map((t) => t.content), utterance],
+              })
+            : [],
+        )
+        .catch((err: unknown) => {
+          console.warn("[TURN] memory: recall failed:", err instanceof Error ? err.message : err);
+          return [] as RecalledAnswer[];
+        });
+      const timedOut = Symbol("timeout");
+      const result = await Promise.race([
+        recall,
+        new Promise<typeof timedOut>((res) => setTimeout(() => res(timedOut), MEMORY_WAIT_MS)),
+      ]);
+      if (result === timedOut) {
+        console.log(`[TURN] memory: skipped (not ready within ${MEMORY_WAIT_MS}ms)`);
+      } else {
+        earlierAnswers = result;
+        if (earlierAnswers.length > 0) {
+          console.log(
+            `[TURN] memory: ${earlierAnswers.length} earlier answer(s), best similarity ${earlierAnswers[0].similarity}, waited ${Date.now() - memStart}ms`,
+          );
+        }
+      }
+    }
+
     const contextBlock = buildTurnContext({
       jobRole: interview.jobRole,
       state: currentState,
@@ -273,6 +321,7 @@ async function handleTurn(
       avgAnswerWords,
       openingTemplate,
       isBridgeTurn: isFirstCoreQuestion,
+      earlierAnswers,
     });
 
     let llmResponse = null;
@@ -506,6 +555,7 @@ async function handleTurn(
         kScore: stateAfterTopic.kScore ?? null,
         depth: stateAfterTopic.targetDepth ?? 0,
         action: finalAction,
+        memoryHits: earlierAnswers.length,
       },
     });
 

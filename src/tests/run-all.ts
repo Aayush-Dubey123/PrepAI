@@ -15,6 +15,7 @@ const testSuites = [
   { name: "Brain Core Logic", file: "src/tests/brain/brain.test.ts" },
   { name: "Brain Step 4 Assertions", file: "src/tests/brain/brain-step4.test.ts" },
   { name: "Answer Grounding & Follow-ups", file: "src/tests/interview/answer-grounding.test.ts" },
+  { name: "Interview Memory (pgvector recall)", file: "src/tests/interview/memory-recall.test.ts" },
   { name: "Rate Limit Assertions", file: "src/tests/security/rate-limit.test.ts" },
   { name: "Phase 1-6 Full Verification Harness", file: "src/tests/interview/phase-verification.ts" },
   { name: "Analytics & Admin Auth Barriers", file: "src/tests/auth/analytics-auth.test.ts" },
@@ -32,8 +33,8 @@ const testSuites = [
   { name: "Drills, Interview & Analytics E2E Integration", file: "src/tests/e2e/e2e-live-integration.test.ts" },
 ];
 
-if (testSuites.length !== 18) {
-  console.error(`Expected exactly 18 test suites, found ${testSuites.length}`);
+if (testSuites.length !== 19) {
+  console.error(`Expected exactly 19 test suites, found ${testSuites.length}`);
   process.exit(1);
 }
 
