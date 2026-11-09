@@ -25,6 +25,25 @@ import { useToast } from "@/src/components/ui/feedback/ToastProvider";
 import { isTechnicalPracticeEnabled } from "@/src/lib/core/config";
 
 let globalIsAdminCache: boolean | null = null;
+// One shared request per page session: every sidebar mount (each page renders its own, and
+// React dev mode mounts twice) reuses it instead of calling /api/admin/check again.
+let adminCheckPromise: Promise<boolean> | null = null;
+
+function loadIsAdmin(): Promise<boolean> {
+  if (!adminCheckPromise) {
+    adminCheckPromise = fetch("/api/admin/check")
+      .then((res) => (res.ok ? res.json() : { isAdmin: false }))
+      .then((data) => {
+        globalIsAdminCache = Boolean(data?.isAdmin);
+        return globalIsAdminCache;
+      })
+      .catch(() => {
+        adminCheckPromise = null; // allow a retry on the next mount after a network error
+        return false;
+      });
+  }
+  return adminCheckPromise;
+}
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -95,18 +114,9 @@ export function AppSidebar() {
   useEffect(() => {
     if (globalIsAdminCache !== null) return;
     let ignore = false;
-    fetch("/api/admin/check")
-      .then((res) => res.json())
-      .then((data) => {
-        if (!ignore) {
-          const adminStatus = Boolean(data?.isAdmin);
-          globalIsAdminCache = adminStatus;
-          setIsAdmin(adminStatus);
-        }
-      })
-      .catch(() => {
-        // Non-admin or unauthenticated
-      });
+    loadIsAdmin().then((adminStatus) => {
+      if (!ignore) setIsAdmin(adminStatus);
+    });
     return () => {
       ignore = true;
     };
@@ -254,7 +264,8 @@ export function AppSidebar() {
             {isTechnicalPracticeEnabled() && (
               <Link
                 href="/practice"
-                prefetch={true}
+                // Default prefetch: /practice is dynamic (5 DB queries), so a full background
+                // prefetch on every page competed with real requests for DB connections.
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
                   pathname.startsWith("/practice") || pathname.startsWith("/gym")
@@ -373,7 +384,8 @@ export function AppSidebar() {
             {isTechnicalPracticeEnabled() && (
               <Link
                 href="/practice"
-                prefetch={true}
+                // Default prefetch: /practice is dynamic (5 DB queries), so a full background
+                // prefetch on every page competed with real requests for DB connections.
                 className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                   pathname.startsWith("/practice") || pathname.startsWith("/gym")
                     ? "bg-[#e0e7ff] text-[#3730a3] font-semibold shadow-xs"

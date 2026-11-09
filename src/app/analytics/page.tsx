@@ -283,6 +283,11 @@ export default function CandidateAnalyticsPage() {
 
   useEffect(() => {
     if (!data) return;
+    // The analytics response now carries the recommended set, so no second request is needed.
+    if (data.recommendedSet) {
+      setResolvedPracticeSet(data.recommendedSet);
+      return;
+    }
     const rawSlug = data.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
     const targetSlug = VALID_DRILL_SLUGS[rawSlug] ? rawSlug : "rapid-screen";
     const targetLevel = (data.summary?.totalInterviews ?? 0) > 0 ? "senior" : "foundational";

@@ -382,7 +382,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Unauthorized", code: "AUTH_REQUIRED" }, { status: 401 });
     }
 
-    const rl = checkParseResumeLimit(userId);
+    const rl = await checkParseResumeLimit(userId);
     if (!rl.allowed) {
       logEvent(request, {
         userId,

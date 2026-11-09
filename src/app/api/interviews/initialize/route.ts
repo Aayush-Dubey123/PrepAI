@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rl = checkInterviewCreate(userId);
+    const rl = await checkInterviewCreate(userId);
     if (!rl.allowed) {
       logEvent(req, { userId, sessionId, type: "rate_limited", meta: { bucket: "interview_create" } });
       return NextResponse.json(

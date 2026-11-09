@@ -16,6 +16,9 @@ export interface TranscriptDrawerProps {
   isAiThinking: boolean;
   onBargeIn: () => void;
   transcriptError: string | null;
+  /** Shown next to the error when the last answer can be re-sent. */
+  canRetry?: boolean;
+  onRetry?: () => void;
 }
 
 export function TranscriptDrawer({
@@ -30,6 +33,8 @@ export function TranscriptDrawer({
   isAiThinking,
   onBargeIn,
   transcriptError,
+  canRetry = false,
+  onRetry,
 }: TranscriptDrawerProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -155,8 +160,17 @@ export function TranscriptDrawer({
 
       {/* Error notification */}
       {transcriptError && (
-        <div className="p-3 mx-3 mb-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
-          {transcriptError}
+        <div className="p-3 mx-3 mb-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-3">
+          <span>{transcriptError}</span>
+          {canRetry && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="shrink-0 px-2.5 py-1 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-700 cursor-pointer"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 

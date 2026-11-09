@@ -41,7 +41,7 @@ export async function POST(
     const { id: interviewId } = await params;
 
     // Rate limit: per-interview bucket, NOT the interview-creation bucket
-    const rl = checkIntegrityLimit(interviewId);
+    const rl = await checkIntegrityLimit(interviewId);
     if (!rl.allowed) {
       logEvent(req, { userId, sessionId, interviewId, type: "rate_limited", meta: { bucket: "integrity" } });
       return NextResponse.json(

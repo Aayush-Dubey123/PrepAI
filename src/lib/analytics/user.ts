@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/src/db";
-import { drills, drillSessions, concepts, userConceptMastery } from "@/src/db/schema";
+import { drills, drillSessions, concepts, userConceptMastery, practiceSets } from "@/src/db/schema";
 
 export interface UserAnalyticsSummary {
   totalInterviews: number;
@@ -108,7 +108,50 @@ export interface UserAnalyticsData {
     do_not_hire: number;
   };
   gym?: GymAnalyticsData;
+  /** First practice set for the top blind spot, resolved on the server (saves a client round trip). */
+  recommendedSet?: RecommendedPracticeSet | null;
 };
+
+export interface RecommendedPracticeSet {
+  id: string;
+  title: string;
+  drillSlug: string;
+  level: string;
+}
+
+const VALID_DRILL_SLUGS = new Set([
+  "system-design",
+  "algo-logic",
+  "behavioral-star",
+  "frontend-arch",
+  "database-concurrency",
+  "rapid-screen",
+]);
+
+/**
+ * Same choice the Analytics page used to make on the client after a second request to
+ * /api/drills/[slug]/sets: the top blind spot's drill, at "senior" level once the user has
+ * interviews (else "foundational"), falling back to any set of that drill.
+ */
+export async function resolveRecommendedSet(analytics: UserAnalyticsData): Promise<RecommendedPracticeSet | null> {
+  const rawSlug = analytics.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+  const drillSlug = VALID_DRILL_SLUGS.has(rawSlug) ? rawSlug : "rapid-screen";
+  const level = (analytics.summary?.totalInterviews ?? 0) > 0 ? "senior" : "foundational";
+  try {
+    const [row] = await db
+      .select({ id: practiceSets.id, title: practiceSets.title, level: practiceSets.level })
+      .from(practiceSets)
+      .innerJoin(drills, eq(drills.id, practiceSets.drillId))
+      .where(eq(drills.slug, drillSlug))
+      .orderBy(sql`(${practiceSets.level} = ${level}) DESC`, practiceSets.sortOrder, practiceSets.slug)
+      .limit(1);
+    // The client keeps the target level for launching even when it falls back to another set.
+    return row ? { id: row.id, title: row.title, drillSlug, level } : null;
+  } catch (err) {
+    console.warn("[ANALYTICS] recommended set lookup failed:", err);
+    return null;
+  }
+}
 
 export interface GymAnalyticsData {
   drillStats: { slug: string; title: string; avgScore: number; attempts: number }[];
@@ -506,8 +549,11 @@ export function computeUserAnalytics(interviewsList: Array<unknown>): UserAnalyt
 
 export async function computeGymAnalytics(userId: string): Promise<GymAnalyticsData> {
   try {
-    const allDrills = await db.select({ id: drills.id, slug: drills.slug, title: drills.title }).from(drills);
-    const sessionStats = await db
+    // All five queries are independent: run them in parallel instead of paying one
+    // DB round trip each (~150–200 ms to the EU-West pooler) in sequence.
+    const [allDrills, sessionStats, masteryRows, trendRows, dayRows] = await Promise.all([
+      db.select({ id: drills.id, slug: drills.slug, title: drills.title }).from(drills),
+      db
       .select({
         drillId: drillSessions.drillId,
         attempts: sql<number>`count(*) FILTER (WHERE ${drillSessions.status} = 'completed')`,
@@ -515,7 +561,38 @@ export async function computeGymAnalytics(userId: string): Promise<GymAnalyticsD
       })
       .from(drillSessions)
       .where(eq(drillSessions.userId, userId))
-      .groupBy(drillSessions.drillId);
+      .groupBy(drillSessions.drillId),
+      db
+      .select({
+        conceptId: userConceptMastery.conceptId,
+        label: concepts.label,
+        mastery: userConceptMastery.mastery,
+        drillSlug: drills.slug,
+      })
+      .from(userConceptMastery)
+      .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
+      .innerJoin(drills, eq(drills.id, concepts.drillId))
+      .where(and(eq(userConceptMastery.userId, userId), sql`${userConceptMastery.mastery} > 0`))
+      .orderBy(userConceptMastery.mastery),
+      db
+      .select({
+        date: drillSessions.finishedAt,
+        score: drillSessions.score,
+        drillSlug: drills.slug,
+      })
+      .from(drillSessions)
+      .innerJoin(drills, eq(drills.id, drillSessions.drillId))
+      .where(and(eq(drillSessions.userId, userId), eq(drillSessions.status, "completed"), sql`${drillSessions.score} IS NOT NULL`))
+      .orderBy(drillSessions.finishedAt)
+      .limit(30),
+      db
+      .select({
+        day: sql<string>`DISTINCT TO_CHAR(${drillSessions.finishedAt}, 'YYYY-MM-DD')`,
+      })
+      .from(drillSessions)
+      .where(and(eq(drillSessions.userId, userId), eq(drillSessions.status, "completed"), sql`${drillSessions.finishedAt} IS NOT NULL`))
+      .orderBy(sql`1 DESC`),
+    ]);
 
     const statsMap = new Map<string, { attempts: number; avgScore: number }>();
     for (const s of sessionStats) {
@@ -532,50 +609,17 @@ export async function computeGymAnalytics(userId: string): Promise<GymAnalyticsD
       avgScore: statsMap.get(d.id)?.avgScore ?? 0,
     }));
 
-    const masteryRows = await db
-      .select({
-        conceptId: userConceptMastery.conceptId,
-        label: concepts.label,
-        mastery: userConceptMastery.mastery,
-        drillSlug: drills.slug,
-      })
-      .from(userConceptMastery)
-      .innerJoin(concepts, eq(concepts.id, userConceptMastery.conceptId))
-      .innerJoin(drills, eq(drills.id, concepts.drillId))
-      .where(and(eq(userConceptMastery.userId, userId), sql`${userConceptMastery.mastery} > 0`))
-      .orderBy(userConceptMastery.mastery);
-
     const conceptMastery = masteryRows.map((m) => ({
       conceptId: m.conceptId,
       label: m.label,
       mastery: Math.round(Number(m.mastery) * 100) / 100,
       drillSlug: m.drillSlug,
     }));
-    const trendRows = await db
-      .select({
-        date: drillSessions.finishedAt,
-        score: drillSessions.score,
-        drillSlug: drills.slug,
-      })
-      .from(drillSessions)
-      .innerJoin(drills, eq(drills.id, drillSessions.drillId))
-      .where(and(eq(drillSessions.userId, userId), eq(drillSessions.status, "completed"), sql`${drillSessions.score} IS NOT NULL`))
-      .orderBy(drillSessions.finishedAt)
-      .limit(30);
-
     const scoreTrend = trendRows.map((t) => ({
       date: t.date ? new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—",
       score: t.score ?? 0,
       drillSlug: t.drillSlug,
     }));
-
-    const dayRows = await db
-      .select({
-        day: sql<string>`DISTINCT TO_CHAR(${drillSessions.finishedAt}, 'YYYY-MM-DD')`,
-      })
-      .from(drillSessions)
-      .where(and(eq(drillSessions.userId, userId), eq(drillSessions.status, "completed"), sql`${drillSessions.finishedAt} IS NOT NULL`))
-      .orderBy(sql`1 DESC`);
 
     const days = new Set(dayRows.map((r) => r.day));
     let streak = 0;

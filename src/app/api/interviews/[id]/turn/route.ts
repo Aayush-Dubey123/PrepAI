@@ -54,10 +54,49 @@ import { checkTurnLimit, isReplayedRequest } from "@/src/lib/security/rate-limit
 import { getKBEntry } from "@/src/lib/interview/knowledge-base/index";
 import { logEvalLatency } from "@/src/eval/analytics/logger";
 import { logEvent } from "@/src/lib/security/audit";
+import { getInFlightTurn, trackTurn, waitForRemoteTurn } from "@/src/lib/interview/orchestration/turn-inflight";
+import { embedTextCached } from "@/src/lib/ai/embedding-cache";
+import { recallEarlierAnswers, type RecalledAnswer } from "@/src/lib/interview/memory/recall";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
+// Longest the turn waits for memory before calling the LLM without it (env-tunable).
+const MEMORY_WAIT_MS = Number(process.env.MEMORY_WAIT_MS) || 450;
 
+/**
+ * Idempotency wrapper. A request carrying a clientRequestId that is already being processed
+ * joins that work and gets the same response. Retries of a turn that has already finished are
+ * answered from the persisted state.lastResponse inside handleTurn.
+ */
 export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id: interviewId } = await ctx.params;
+  const peek = (await req.clone().json().catch(() => null)) as { clientRequestId?: unknown } | null;
+  const requestId = typeof peek?.clientRequestId === "string" ? peek.clientRequestId : null;
+  if (!requestId) return handleTurn(req, ctx);
+
+  const existing = getInFlightTurn(interviewId, requestId);
+  if (existing) {
+    console.log(`[TURN] '${requestId}' already in flight — joining it`);
+  } else if (await waitForRemoteTurn(interviewId, requestId)) {
+    // Ran on another instance; handleTurn below now answers from the persisted lastResponse.
+    console.log(`[TURN] '${requestId}' finished on another instance — replaying its reply`);
+  }
+  const settled = await (existing ??
+    trackTurn(
+      interviewId,
+      requestId,
+      handleTurn(req, ctx).then(async (res) => ({
+        status: res.status,
+        body: await res.text(),
+        contentType: res.headers.get("content-type") ?? "application/json",
+      })),
+    ));
+  return new NextResponse(settled.body, { status: settled.status, headers: { "content-type": settled.contentType } });
+}
+
+async function handleTurn(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -72,7 +111,7 @@ export async function POST(
 
     const { id: interviewId } = await params;
 
-    const rl = checkTurnLimit(userId);
+    const rl = await checkTurnLimit(userId);
     if (!rl.allowed) {
       logEvent(req, { userId, sessionId, interviewId, type: "rate_limited", meta: { bucket: "turn" } });
       return NextResponse.json(
@@ -82,6 +121,17 @@ export async function POST(
     }
 
     const body = TurnRequestSchema.parse(await req.json());
+
+    // Interview memory: start embedding the answer now so it overlaps with the DB load and
+    // turn setup below. Short replies ("yes", "okay") carry no claim worth recalling.
+    const memoryEnabled =
+      process.env.INTERVIEW_MEMORY !== "false" && body.userUtterance.trim().split(/\s+/).length >= 6;
+    const answerEmbedding = memoryEnabled
+      ? embedTextCached(body.userUtterance).catch((err: unknown) => {
+          console.warn("[TURN] memory: embedding failed:", err instanceof Error ? err.message : err);
+          return null;
+        })
+      : Promise.resolve(null);
 
     // ── 2. Load interview + server state ─────────────────────────────────────
     const [interview] = await db
@@ -120,7 +170,10 @@ export async function POST(
     const utteranceHash = body.userUtterance.split('').reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0).toString(36).slice(-6);
     const requestId = body.clientRequestId || `${interviewId}_t${state.turnCount}_${utteranceHash}`;
 
-    if (isReplayedRequest(requestId) && state.lastRequestId === requestId && state.lastResponse) {
+    // The persisted state is the source of truth: a retry of the last completed turn gets the
+    // same reply, even after a server restart (the in-memory seen-ID set doesn't survive one).
+    isReplayedRequest(requestId);
+    if (state.lastRequestId === requestId && state.lastResponse) {
       console.log(`[TURN] Idempotent replay '${requestId}' — returning cached reply`);
       return NextResponse.json(state.lastResponse);
     }
@@ -219,6 +272,39 @@ export async function POST(
       ? getOpeningTemplate(currentState.conversationSeed ?? 0)
       : undefined;
 
+    // ── 8b. Interview memory (pgvector) — strictly time-boxed ────────────────
+    let earlierAnswers: RecalledAnswer[] = [];
+    if (memoryEnabled && (currentState.phase === "core" || currentState.phase === "wrapup")) {
+      const memStart = Date.now();
+      const recall = answerEmbedding
+        .then((embedding) =>
+          embedding
+            ? recallEarlierAnswers(interviewId, embedding, {
+                exclude: [...body.recentTranscript.map((t) => t.content), utterance],
+              })
+            : [],
+        )
+        .catch((err: unknown) => {
+          console.warn("[TURN] memory: recall failed:", err instanceof Error ? err.message : err);
+          return [] as RecalledAnswer[];
+        });
+      const timedOut = Symbol("timeout");
+      const result = await Promise.race([
+        recall,
+        new Promise<typeof timedOut>((res) => setTimeout(() => res(timedOut), MEMORY_WAIT_MS)),
+      ]);
+      if (result === timedOut) {
+        console.log(`[TURN] memory: skipped (not ready within ${MEMORY_WAIT_MS}ms)`);
+      } else {
+        earlierAnswers = result;
+        if (earlierAnswers.length > 0) {
+          console.log(
+            `[TURN] memory: ${earlierAnswers.length} earlier answer(s), best similarity ${earlierAnswers[0].similarity}, waited ${Date.now() - memStart}ms`,
+          );
+        }
+      }
+    }
+
     const contextBlock = buildTurnContext({
       jobRole: interview.jobRole,
       state: currentState,
@@ -235,6 +321,7 @@ export async function POST(
       avgAnswerWords,
       openingTemplate,
       isBridgeTurn: isFirstCoreQuestion,
+      earlierAnswers,
     });
 
     let llmResponse = null;
@@ -468,6 +555,7 @@ export async function POST(
         kScore: stateAfterTopic.kScore ?? null,
         depth: stateAfterTopic.targetDepth ?? 0,
         action: finalAction,
+        memoryHits: earlierAnswers.length,
       },
     });
 
@@ -481,23 +569,41 @@ export async function POST(
     }
 
     // ── 11. Persist state ────────────────────────────────────────────────────
-    after(async () => {
-      try {
-        await saveState(interviewId, stateAfterTopic, {
-          currentPhase: currentPhaseMapped,
-          ...(isComplete ? { status: "completed" } : {}),
-        });
+    const persist = async () => {
+      await saveState(interviewId, stateAfterTopic, {
+        currentPhase: currentPhaseMapped,
+        ...(isComplete ? { status: "completed" } : {}),
+      });
 
-        await db
-          .update(interviews)
-          .set({
-            totalTurns: (interview.totalTurns ?? 0) + 1,
-          })
-          .where(eq(interviews.id, interviewId));
+      await db
+        .update(interviews)
+        .set({
+          totalTurns: (interview.totalTurns ?? 0) + 1,
+        })
+        .where(eq(interviews.id, interviewId));
+    };
+
+    if (isComplete) {
+      // The client starts feedback generation as soon as it sees isComplete, so the final
+      // scores and "completed" status must be committed before we reply.
+      try {
+        await persist();
       } catch (dbErr) {
-        console.error("[TURN] after() DB save failed:", dbErr);
+        console.error("[TURN] final state save failed:", dbErr);
+        return NextResponse.json(
+          { error: "Couldn't save the interview state — please retry.", code: "STATE_SAVE_FAILED", retryAfterSec: 2 },
+          { status: 503, headers: { "Retry-After": "2" } },
+        );
       }
-    });
+    } else {
+      after(async () => {
+        try {
+          await persist();
+        } catch (dbErr) {
+          console.error("[TURN] after() DB save failed:", dbErr);
+        }
+      });
+    }
 
     return NextResponse.json(responsePayload);
   } catch (error) {

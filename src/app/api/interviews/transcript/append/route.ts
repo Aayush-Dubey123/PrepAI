@@ -13,7 +13,7 @@ import { ZodError } from "zod";
 import { after } from "next/server";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks } from "@/src/db/schema";
-import { embedText } from "@/src/lib/ai/gemini-embeddings";
+import { embedTextCached } from "@/src/lib/ai/embedding-cache";
 import { AppendTranscriptSchema } from "@/src/schemas/interview/transcript";
 
 export async function POST(request: Request) {
@@ -37,35 +37,58 @@ export async function POST(request: Request) {
       return Response.json({ error: "Interview not found", code: "NOT_FOUND" }, { status: 404 });
     }
 
-    // Insert chunk WITHOUT embedding — fast path for the live turn
-    const [chunk] = await db
+    // Insert chunk WITHOUT embedding — fast path for the live turn.
+    // Idempotent on the client-supplied id: a retry returns the existing row instead of
+    // inserting a duplicate answer.
+    const [inserted] = await db
       .insert(transcriptChunks)
       .values({
+        ...(body.id ? { id: body.id } : {}),
         interviewId: body.interviewId,
         content: body.content,
         speaker: body.speaker,
         // embedding will be backfilled asynchronously below
       })
+      .onConflictDoNothing({ target: transcriptChunks.id })
       .returning();
+
+    const chunk = inserted;
+    if (!chunk && body.id) {
+      const [existing] = await db
+        .select()
+        .from(transcriptChunks)
+        .where(and(eq(transcriptChunks.id, body.id), eq(transcriptChunks.interviewId, body.interviewId)))
+        .limit(1);
+      if (!existing) {
+        return Response.json({ error: "Chunk id conflict", code: "CONFLICT" }, { status: 409 });
+      }
+      // Already saved by an earlier attempt; the embedding job was scheduled then.
+      return Response.json(existing);
+    }
+    if (!chunk) {
+      throw new Error("Transcript insert returned no row");
+    }
+    const savedChunk = chunk;
 
     // Fire-and-forget: compute embedding and update the row after response is sent
     after(async () => {
       try {
-        const values = await embedText(body.content);
+        // Shared with /turn's memory lookup: the same answer text is embedded only once.
+        const values = await embedTextCached(body.content);
         await db
           .update(transcriptChunks)
           .set({ embedding: values })
-          .where(eq(transcriptChunks.id, chunk.id));
+          .where(eq(transcriptChunks.id, savedChunk.id));
       } catch (embErr) {
         // Log but never surface — RAG will simply skip un-embedded chunks
         console.error(
-          `[TRANSCRIPT] Embedding failed for chunk ${chunk.id}:`,
+          `[TRANSCRIPT] Embedding failed for chunk ${savedChunk.id}:`,
           embErr instanceof Error ? embErr.message : embErr,
         );
       }
     });
 
-    return Response.json(chunk);
+    return Response.json(savedChunk);
   } catch (error) {
     if (error instanceof ZodError) {
       return Response.json(

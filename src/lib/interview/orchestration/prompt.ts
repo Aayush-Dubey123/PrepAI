@@ -103,6 +103,8 @@ export interface TurnContextOptions {
   avgAnswerWords?: number;
   openingTemplate?: string;
   isBridgeTurn?: boolean;
+  /** Earlier candidate answers semantically close to the latest one (pgvector recall). */
+  earlierAnswers?: Array<{ content: string; minutesAgo: number | null }>;
 }
 
 export function buildTurnContext(opts: TurnContextOptions): string {
@@ -123,6 +125,7 @@ export function buildTurnContext(opts: TurnContextOptions): string {
     avgAnswerWords,
     openingTemplate,
     isBridgeTurn = false,
+    earlierAnswers = [],
   } = opts;
 
   const lines: string[] = [];
@@ -216,6 +219,17 @@ export function buildTurnContext(opts: TurnContextOptions): string {
   } else if (userUtterance && userUtterance.length > 8 && state.phase === "core") {
     lines.push(`=== SIGNALS FROM LAST ANSWER ===`);
     lines.push(`(No specific technologies detected. Probe the substance of the candidate's answer before changing topics.)`);
+    lines.push(``);
+  }
+
+  // ── INTERVIEW MEMORY (pgvector recall of earlier answers) ─────────────────
+  if (earlierAnswers.length > 0 && (state.phase === "core" || state.phase === "wrapup")) {
+    lines.push(`=== EARLIER IN THIS INTERVIEW (candidate's own words, related to the latest answer) ===`);
+    earlierAnswers.forEach((a) => {
+      const when = a.minutesAgo === null ? "earlier" : a.minutesAgo <= 1 ? "a minute ago" : `~${a.minutesAgo} min ago`;
+      lines.push(`- (${when}) "${a.content}"`);
+    });
+    lines.push(`INSTRUCTION: When it genuinely adds depth, connect your question to ONE of these (e.g. "Earlier you mentioned …, how does that relate to …?"), or probe a tension between an earlier claim and the latest answer. Paraphrase faithfully and never attribute anything not written above. Skip this block when it is not relevant, and do not reference earlier answers on consecutive turns.`);
     lines.push(``);
   }
 
