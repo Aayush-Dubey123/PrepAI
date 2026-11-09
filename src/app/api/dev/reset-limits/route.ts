@@ -12,6 +12,6 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  devClearUserLimits(userId);
+  await devClearUserLimits(userId);
   return NextResponse.json({ ok: true, message: `All rate limit counters cleared for user ${userId}` });
 }

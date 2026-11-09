@@ -54,7 +54,7 @@ import { checkTurnLimit, isReplayedRequest } from "@/src/lib/security/rate-limit
 import { getKBEntry } from "@/src/lib/interview/knowledge-base/index";
 import { logEvalLatency } from "@/src/eval/analytics/logger";
 import { logEvent } from "@/src/lib/security/audit";
-import { getInFlightTurn, trackTurn } from "@/src/lib/interview/orchestration/turn-inflight";
+import { getInFlightTurn, trackTurn, waitForRemoteTurn } from "@/src/lib/interview/orchestration/turn-inflight";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 
@@ -75,6 +75,9 @@ export async function POST(
   const existing = getInFlightTurn(interviewId, requestId);
   if (existing) {
     console.log(`[TURN] '${requestId}' already in flight — joining it`);
+  } else if (await waitForRemoteTurn(interviewId, requestId)) {
+    // Ran on another instance; handleTurn below now answers from the persisted lastResponse.
+    console.log(`[TURN] '${requestId}' finished on another instance — replaying its reply`);
   }
   const settled = await (existing ??
     trackTurn(
@@ -104,7 +107,7 @@ async function handleTurn(
 
     const { id: interviewId } = await params;
 
-    const rl = checkTurnLimit(userId);
+    const rl = await checkTurnLimit(userId);
     if (!rl.allowed) {
       logEvent(req, { userId, sessionId, interviewId, type: "rate_limited", meta: { bucket: "turn" } });
       return NextResponse.json(

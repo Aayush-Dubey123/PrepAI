@@ -12,9 +12,10 @@
  *   `cause` tells quota exhaustion apart from timeouts and provider errors
  * - Returns JSON on every error path
  *
- * Budget counters live in process memory: they are per server instance and reset on restart,
- * so treat them as an approximate guard. The provider quota is the real limit, which is why
- * quota responses from Sarvam are classified and logged as `quota_exhausted`.
+ * Shared state (audio cache, daily budgets, blocked keys) lives in Redis when REDIS_URL is
+ * reachable, so it holds across server instances and restarts; otherwise it falls back to
+ * per-process memory. The provider quota is still the real limit, which is why quota responses
+ * from Sarvam are classified and logged as `quota_exhausted`.
  */
 
 import { auth } from "@clerk/nextjs/server";
@@ -24,6 +25,7 @@ import { createHash } from "crypto";
 import { logEvalLatency } from "@/src/eval/analytics/logger";
 import { logEvent } from "@/src/lib/security/audit";
 import { checkTtsLimit } from "@/src/lib/security/rate-limit";
+import { key as redisKey, withRedis } from "@/src/lib/core/redis";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -58,9 +60,13 @@ const TTSRequestSchema = z.object({
   speaker: z.string().optional().default("ritu"),
 });
 
-// ─── In-memory cache (hash → base64 audio chunks) ────────────────────────────
+// ─── Audio cache: in-process L1 + shared Redis L2 (hash → base64 audio chunks) ─
+//
+// Redis makes a phrase synthesised once (greeting, fallback questions, repeated prompts) free
+// for every instance and after restarts, which directly saves Sarvam free-tier quota.
 
 const ttsCache = new Map<string, string[]>();
+const CACHE_TTL_SEC = envInt("TTS_CACHE_TTL_SEC", 7 * 24 * 3600);
 
 function cacheKey(text: string, speaker: string): string {
   return createHash("sha256")
@@ -68,7 +74,38 @@ function cacheKey(text: string, speaker: string): string {
     .digest("hex");
 }
 
-// ─── Per-user and global daily budget ────────────────────────────────────────
+function rememberLocally(hash: string, audios: string[]) {
+  ttsCache.set(hash, audios);
+  if (ttsCache.size > CACHE_MAX_ENTRIES) {
+    const firstKey = ttsCache.keys().next().value;
+    if (firstKey) ttsCache.delete(firstKey);
+  }
+}
+
+async function getCachedAudio(hash: string): Promise<{ audios: string[]; tier: "memory" | "redis" } | null> {
+  const local = ttsCache.get(hash);
+  if (local) return { audios: local, tier: "memory" };
+  const raw = await withRedis((r) => r.get(redisKey("tts", "audio", hash)), () => null);
+  if (!raw) return null;
+  try {
+    const audios = JSON.parse(raw) as string[];
+    if (!Array.isArray(audios) || audios.length === 0) return null;
+    rememberLocally(hash, audios);
+    return { audios, tier: "redis" };
+  } catch {
+    return null;
+  }
+}
+
+async function cacheAudio(hash: string, audios: string[]): Promise<void> {
+  rememberLocally(hash, audios);
+  await withRedis(
+    (r) => r.set(redisKey("tts", "audio", hash), JSON.stringify(audios), "EX", CACHE_TTL_SEC).then(() => undefined),
+    () => undefined,
+  );
+}
+
+// ─── Per-user and global daily budget (Redis counters, memory fallback) ───────
 
 interface DailyBudget {
   chars: number;
@@ -82,7 +119,7 @@ function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function userBudget(userId: string): DailyBudget {
+function memoryBudget(userId: string): DailyBudget {
   const today = todayUTC();
   if (globalBudget.date !== today) globalBudget = { chars: 0, date: today };
   const ub = userBudgets.get(userId) ?? { chars: 0, date: today };
@@ -91,16 +128,44 @@ function userBudget(userId: string): DailyBudget {
   return ub;
 }
 
-/** Checks without deducting, so failed synthesis doesn't consume budget. */
-function hasBudget(userId: string, charCount: number): boolean {
-  const ub = userBudget(userId);
-  return globalBudget.chars + charCount <= GLOBAL_DAILY_CHARS && ub.chars + charCount <= USER_DAILY_CHARS;
+const budgetKeys = (userId: string) => {
+  const day = todayUTC();
+  return [redisKey("tts", "budget", "global", day), redisKey("tts", "budget", "user", userId, day)] as const;
+};
+
+/** Current usage today: { global, user }. Shared across instances when Redis is up. */
+async function budgetUsage(userId: string): Promise<{ global: number; user: number }> {
+  return withRedis(
+    async (r) => {
+      const [g, u] = await r.mget(...budgetKeys(userId));
+      return { global: Number(g) || 0, user: Number(u) || 0 };
+    },
+    () => {
+      const ub = memoryBudget(userId);
+      return { global: globalBudget.chars, user: ub.chars };
+    },
+  );
 }
 
-function deductBudget(userId: string, charCount: number): void {
-  const ub = userBudget(userId);
-  globalBudget.chars += charCount;
-  ub.chars += charCount;
+/** Checks without deducting, so failed synthesis doesn't consume budget. */
+async function hasBudget(userId: string, charCount: number): Promise<boolean> {
+  const used = await budgetUsage(userId);
+  return used.global + charCount <= GLOBAL_DAILY_CHARS && used.user + charCount <= USER_DAILY_CHARS;
+}
+
+async function deductBudget(userId: string, charCount: number): Promise<void> {
+  const [gk, uk] = budgetKeys(userId);
+  await withRedis(
+    async (r) => {
+      // Counters expire two days later, so yesterday's keys clean themselves up.
+      await r.multi().incrby(gk, charCount).expire(gk, 2 * 86400).incrby(uk, charCount).expire(uk, 2 * 86400).exec();
+    },
+    () => {
+      const ub = memoryBudget(userId);
+      globalBudget.chars += charCount;
+      ub.chars += charCount;
+    },
+  );
 }
 
 // ─── API keys ─────────────────────────────────────────────────────────────────
@@ -127,9 +192,25 @@ function nextUtcMidnight(): number {
   return d.getTime();
 }
 
-function availableKeys(): string[] {
+/** Keys not currently blocked. A block set by any instance (stored in Redis) applies to all. */
+async function availableKeys(): Promise<string[]> {
+  const keys = configuredKeys();
+  if (keys.length === 0) return [];
+  const remoteBlocked = await withRedis(
+    async (r) => (await r.mget(...keys.map((k) => redisKey("tts", "keyblock", keyId(k))))).map(Boolean),
+    () => keys.map(() => false),
+  );
   const now = Date.now();
-  return configuredKeys().filter((k) => (keyBlockedUntil.get(keyId(k)) ?? 0) <= now);
+  return keys.filter((k, i) => !remoteBlocked[i] && (keyBlockedUntil.get(keyId(k)) ?? 0) <= now);
+}
+
+async function blockKey(key: string, untilMs: number): Promise<void> {
+  keyBlockedUntil.set(keyId(key), untilMs);
+  const ttl = Math.max(1000, untilMs - Date.now());
+  await withRedis(
+    (r) => r.set(redisKey("tts", "keyblock", keyId(key)), "1", "PX", ttl).then(() => undefined),
+    () => undefined,
+  );
 }
 
 // ─── Text preprocessing ───────────────────────────────────────────────────────
@@ -257,7 +338,7 @@ async function synthesizeChunk(chunk: string, speaker: string, key: string): Pro
  * different key won't fix a slow or failing provider.
  */
 async function synthesizeWithKeys(chunks: string[], speaker: string): Promise<string[]> {
-  const keys = availableKeys();
+  const keys = await availableKeys();
   if (keys.length === 0) {
     throw configuredKeys().length === 0
       ? new SynthesisError("not_configured", "TTS service not configured")
@@ -272,16 +353,16 @@ async function synthesizeWithKeys(chunks: string[], speaker: string): Promise<st
       const e = err instanceof SynthesisError ? err : new SynthesisError("provider_error", String(err));
       lastErr = e;
       if (e.kind === "quota_exhausted") {
-        keyBlockedUntil.set(keyId(key), nextUtcMidnight());
+        await blockKey(key, nextUtcMidnight());
         console.error(`[TTS] QUOTA EXHAUSTED for key ${keyId(key)}; skipping it until next UTC day. Add another free-tier key to SARVAM_API_KEYS.`);
         continue;
       }
       if (e.kind === "auth_error") {
-        keyBlockedUntil.set(keyId(key), Date.now() + 10 * 60_000);
+        await blockKey(key, Date.now() + 10 * 60_000);
         continue;
       }
       if (e.kind === "rate_limited") {
-        keyBlockedUntil.set(keyId(key), Date.now() + RATE_LIMIT_COOLDOWN_MS);
+        await blockKey(key, Date.now() + RATE_LIMIT_COOLDOWN_MS);
         continue;
       }
       throw e;
@@ -324,7 +405,7 @@ export async function POST(req: NextRequest) {
     reqUserId = userId;
     reqSessionId = sessionId;
 
-    const rl = checkTtsLimit(userId);
+    const rl = await checkTtsLimit(userId);
     if (!rl.allowed) {
       logEvent(req, { userId, sessionId, type: "rate_limited", meta: { bucket: "tts" } });
       return fallbackResponse(req, userId, sessionId, "rate_limited", "TTS rate limit exceeded");
@@ -341,14 +422,15 @@ export async function POST(req: NextRequest) {
 
     const key = cacheKey(cleanText, speaker);
 
-    // Cache hit — free, no budget charged
-    if (ttsCache.has(key)) {
-      console.log(`[TTS] Cache HIT speaker=${speaker} len=${cleanText.length}`);
-      return NextResponse.json({ audios: ttsCache.get(key), cached: true, fallback: false });
+    // Cache hit (this instance or shared Redis) — free, no budget charged
+    const cached = await getCachedAudio(key);
+    if (cached) {
+      console.log(`[TTS] Cache HIT (${cached.tier}) speaker=${speaker} len=${cleanText.length}`);
+      return NextResponse.json({ audios: cached.audios, cached: true, fallback: false });
     }
 
-    if (!hasBudget(userId, cleanText.length)) {
-      console.warn(`[TTS] Local daily budget reached user=${userId} len=${cleanText.length} global=${globalBudget.chars}/${GLOBAL_DAILY_CHARS}`);
+    if (!(await hasBudget(userId, cleanText.length))) {
+      console.warn(`[TTS] Daily budget reached user=${userId} len=${cleanText.length} limit=${GLOBAL_DAILY_CHARS}`);
       return fallbackResponse(req, userId, sessionId, "quota_exhausted", "Daily TTS character budget reached");
     }
 
@@ -384,15 +466,8 @@ export async function POST(req: NextRequest) {
       return fallbackResponse(req, userId, sessionId, "provider_error", "No audio generated");
     }
 
-    // Charge only what was actually synthesised
-    deductBudget(userId, cleanText.length);
-
-    // Store in cache with LRU eviction
-    ttsCache.set(key, audioResults);
-    if (ttsCache.size > CACHE_MAX_ENTRIES) {
-      const firstKey = ttsCache.keys().next().value;
-      if (firstKey) ttsCache.delete(firstKey);
-    }
+    // Charge only what was actually synthesised, and share the audio with every instance
+    await Promise.all([deductBudget(userId, cleanText.length), cacheAudio(key, audioResults)]);
 
     return NextResponse.json({ audios: audioResults, cached: false, fallback: false });
   } catch (error: unknown) {

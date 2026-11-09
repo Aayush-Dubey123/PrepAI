@@ -35,7 +35,7 @@ export async function POST(
       return NextResponse.json({ error: "Invalid session ID", code: "INVALID_SESSION_ID" }, { status: 400 });
     }
     // Rate limit
-    const rl = checkDrillAnswer(userId);
+    const rl = await checkDrillAnswer(userId);
     if (!rl.allowed) {
       return NextResponse.json(
         {

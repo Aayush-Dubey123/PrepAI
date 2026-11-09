@@ -22,6 +22,7 @@ import { ZodError } from "zod";
 import { db } from "@/src/db/index";
 import { interviews, transcriptChunks } from "@/src/db/schema";
 import { hasTurnInFlight } from "@/src/lib/interview/orchestration/turn-inflight";
+import { checkLlmRouteLimit } from "@/src/lib/security/rate-limit";
 import { FeedbackReportSchema, type FeedbackReport } from "@/src/schemas/evaluation/feedback";
 import { generate, tryParseAndValidate } from "@/src/lib/llm/index";
 import { loadState } from "@/src/lib/interview/orchestration/state";
@@ -127,7 +128,7 @@ export async function POST(
 
     // Don't build a report from half-committed state: if a /turn for this interview is still
     // running (computing the final score or saving it), ask the caller to retry shortly.
-    if (hasTurnInFlight(interviewId)) {
+    if (await hasTurnInFlight(interviewId)) {
       return NextResponse.json(
         { error: "Interview state is still being saved — retry shortly.", code: "NOT_READY", retryAfterSec: 1 },
         { status: 409, headers: { "Retry-After": "1" } },
@@ -142,6 +143,16 @@ export async function POST(
 
     if (!interview) {
       return NextResponse.json({ error: "Interview not found", code: "NOT_FOUND" }, { status: 404 });
+    }
+
+    // LLM-backed: the limiter existed (5/min) but this route never applied it. Checked after the
+    // NOT_READY gate and ownership check so retries and probes don't consume the budget.
+    const rl = await checkLlmRouteLimit(userId);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: rl.reason, code: "RATE_LIMITED", retryAfterSec: rl.retryAfterSec },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec ?? 60) } },
+      );
     }
 
     const chunks = await db

@@ -28,7 +28,7 @@ export async function POST(
     const { slug } = await params;
 
     // Rate limit
-    const rl = checkDrillSessionCreate(userId);
+    const rl = await checkDrillSessionCreate(userId);
     if (!rl.allowed) {
       return NextResponse.json(
         {

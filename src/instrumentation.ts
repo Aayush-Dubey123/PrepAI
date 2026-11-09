@@ -11,6 +11,10 @@ export async function register() {
   if (process.env.NEXT_PHASE === "phase-production-build") return;
   if (process.env.PG_WARM_DISABLED === "true") return;
 
+  // Connect to Redis early so the first request can already use the shared rate limits/cache.
+  const { initRedis } = await import("./lib/core/redis");
+  initRedis();
+
   const { warmPool, isServerless } = await import("./db");
   void warmPool();
 
