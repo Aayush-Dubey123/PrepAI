@@ -93,17 +93,17 @@ export function InterviewControls({
             ) : isListening ? (
               <>
                 <Mic className="w-4 h-4 text-white animate-pulse" />
-                <span>Mute Mic <span className="hidden sm:inline">[M]</span></span>
+                <span>Stop &amp; Send <span className="hidden sm:inline">[M]</span></span>
               </>
             ) : isAiSpeaking ? (
               <>
                 <Mic className="w-4 h-4 text-amber-600" />
-                <span>Barge-in <span className="hidden sm:inline">[M]</span></span>
+                <span>Interrupt &amp; Answer <span className="hidden sm:inline">[M]</span></span>
               </>
             ) : (
               <>
                 <Mic className="w-4 h-4 text-white" />
-                <span>Unmute Mic <span className="hidden sm:inline">[M]</span></span>
+                <span>Start Answer <span className="hidden sm:inline">[M]</span></span>
               </>
             )}
           </button>

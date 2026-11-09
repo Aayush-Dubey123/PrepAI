@@ -167,6 +167,7 @@ export default function InterviewStagePage() {
     startListening,
     stopListening,
     takeDraft,
+    stopAndTakeDraft,
     discardDraft,
     supportsSpeechRecognition,
     transcriptError: speechError,
@@ -194,36 +195,37 @@ export default function InterviewStagePage() {
     turnState: orchestrator.turnState,
     onTerminate: handleIntegrityTerminate,
   });
-  // Auto-unmute when AI finishes speaking and hands turn to user
-  const prevTurnStateRef = useRef(orchestrator.turnState);
-  useEffect(() => {
-    const prevState = prevTurnStateRef.current;
-    prevTurnStateRef.current = orchestrator.turnState;
-
-    if (
-      orchestrator.turnState === "user_turn" &&
-      prevState === "ai_speaking" &&
-      supportsSpeechRecognition &&
-      !isListening
-    ) {
-      console.log("[STAGE] AI finished speaking -> Auto-unmuting candidate mic");
-      const timer = setTimeout(() => {
-        startListening();
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [orchestrator.turnState, supportsSpeechRecognition, isListening, startListening]);
-
+  // Manual push-to-talk: the mic never turns on by itself. The candidate presses the mic
+  // button to start answering and presses it again to stop; stopping sends the answer to
+  // the AI, which evaluates it and asks the next question.
+  const [isSendingAnswer, setIsSendingAnswer] = useState(false);
 
   // Controls Handlers
-  const handleToggleMic = () => {
-    if (isListening) {
-      stopListening();
-    } else {
+  const handleToggleMic = async () => {
+    if (isSendingAnswer || orchestrator.turnState === "processing") return;
+
+    if (!isListening) {
       if (isAiSpeaking) {
         stopAiSpeech();
       }
       startListening();
+      return;
+    }
+
+    setIsSendingAnswer(true);
+    try {
+      const spoken = await stopAndTakeDraft();
+      const answer = [spoken, orchestrator.userInput.trim()].filter(Boolean).join(" ");
+      if (answer.length > 0) {
+        orchestrator.setTranscriptError(null);
+        void orchestrator.submitAnswer(answer);
+      } else {
+        orchestrator.setTranscriptError(
+          "We didn't catch anything. Press the mic and try again, or type your answer in the transcript."
+        );
+      }
+    } finally {
+      setIsSendingAnswer(false);
     }
   };
 
@@ -286,7 +288,7 @@ export default function InterviewStagePage() {
         if (turnStateRef.current === "processing") {
           return;
         }
-        handleToggleMicRef.current();
+        void handleToggleMicRef.current();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -384,8 +386,8 @@ export default function InterviewStagePage() {
             isListening={isListening}
             isCameraOn={isCameraOn}
             isAiSpeaking={isAiSpeaking}
-            isProcessing={orchestrator.turnState === "processing"}
-            onToggleMic={handleToggleMic}
+            isProcessing={orchestrator.turnState === "processing" || isSendingAnswer}
+            onToggleMic={() => void handleToggleMic()}
             onToggleCamera={handleToggleCamera}
             onToggleTranscript={() => setIsTranscriptOpen((prev) => !prev)}
             isTranscriptOpen={isTranscriptOpen}

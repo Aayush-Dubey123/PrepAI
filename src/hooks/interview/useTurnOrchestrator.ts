@@ -57,6 +57,8 @@ export interface UseTurnOrchestratorOptions {
   mediaStream: MediaStream | null;
 }
 
+const TURN_TIMEOUT_MS = 45_000;
+
 function mapChunkToEntry(chunk: TranscriptChunkRecord): TranscriptEntry {
   return {
     id: chunk.id,
@@ -279,12 +281,22 @@ export function useTurnOrchestrator({
       const payload = { userUtterance, recentTranscript, clientRequestId };
       console.log("[TURN] Calling /turn, reqId:", clientRequestId, "utterance:", userUtterance.slice(0, 80));
 
-      const attemptFetch = async () =>
-        fetch(`/api/interviews/${interviewId}/turn`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+      // A hung request must never leave the room stuck on "Evaluating": give up after
+      // TURN_TIMEOUT_MS and offer Retry (same request id, so nothing is duplicated).
+      const attemptFetch = async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), TURN_TIMEOUT_MS);
+        try {
+          return await fetch(`/api/interviews/${interviewId}/turn`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+      };
 
       try {
         let response = await attemptFetch();
@@ -416,9 +428,18 @@ export function useTurnOrchestrator({
     await sendAnswer(pending.text, pending.answerId, pending.transcript);
   }, [sendAnswer]);
 
+  // The load effect below must run once per interview. These callbacks change identity during
+  // the session (TTS provider fallback, camera stream arriving), and re-running the load used
+  // to reset the room to "processing" mid-turn, leaving the mic button stuck on "Evaluating".
+  const loadDepsRef = useRef({ onAiSpeakRequested, callTurn, speakAiQuestion });
+  useEffect(() => {
+    loadDepsRef.current = { onAiSpeakRequested, callTurn, speakAiQuestion };
+  }, [onAiSpeakRequested, callTurn, speakAiQuestion]);
+
   // Load session on mount (exact to commit 10e50d9)
   useEffect(() => {
     if (!interviewId) return;
+    const { onAiSpeakRequested, callTurn, speakAiQuestion } = loadDepsRef.current;
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(interviewId)) {
@@ -520,7 +541,7 @@ export function useTurnOrchestrator({
     return () => {
       cancelled = true;
     };
-  }, [interviewId, router, onAiSpeakRequested, callTurn, speakAiQuestion]);
+  }, [interviewId, router]);
 
   // Session duration timer
   useEffect(() => {

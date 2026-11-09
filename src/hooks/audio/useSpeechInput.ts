@@ -144,6 +144,7 @@ export function useSpeechInput({ onBargeIn, enabled = true }: UseSpeechInputOpti
   }, []);
 
   const startSessionRef = useRef<() => void>(() => {});
+  const stopResolverRef = useRef<(() => void) | null>(null);
 
   const scheduleRestart = useCallback(() => {
     const now = Date.now();
@@ -233,6 +234,11 @@ export function useSpeechInput({ onBargeIn, enabled = true }: UseSpeechInputOpti
       commitSession();
       renderDraft();
       if (recognitionRef.current === recognition) recognitionRef.current = null;
+      // A pending stopAndTakeDraft() is waiting for the last words to be finalised.
+      if (stopResolverRef.current) {
+        stopResolverRef.current();
+        stopResolverRef.current = null;
+      }
       if (wantListeningRef.current && !fatalErrorRef.current) {
         scheduleRestart();
       } else if (!fatalErrorRef.current) {
@@ -303,6 +309,40 @@ export function useSpeechInput({ onBargeIn, enabled = true }: UseSpeechInputOpti
     return text;
   }, [commitSession]);
 
+  /**
+   * Stops listening, waits (briefly) for the browser to deliver the final words, then returns
+   * the whole draft and clears it. Used by the mic button: press to speak, press again to send.
+   */
+  const stopAndTakeDraft = useCallback(async (): Promise<string> => {
+    wantListeningRef.current = false;
+    clearRestartTimer();
+    const rec = recognitionRef.current;
+    if (rec) {
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          // The browser never fired onend: drop the session but keep what we have.
+          stopResolverRef.current = null;
+          teardown();
+          resolve();
+        }, 1500);
+        stopResolverRef.current = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        try {
+          rec.stop();
+        } catch {
+          clearTimeout(timeout);
+          stopResolverRef.current = null;
+          teardown();
+          resolve();
+        }
+      });
+    }
+    setListenState((s) => (s === "error" ? s : "stopped"));
+    return takeDraft();
+  }, [teardown, takeDraft]);
+
   const discardDraft = useCallback(() => {
     committedRef.current = "";
     sessionFinalsRef.current = [];
@@ -327,6 +367,7 @@ export function useSpeechInput({ onBargeIn, enabled = true }: UseSpeechInputOpti
     startListening,
     stopListening,
     takeDraft,
+    stopAndTakeDraft,
     discardDraft,
     supportsSpeechRecognition,
     transcriptError,
