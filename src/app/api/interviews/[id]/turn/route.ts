@@ -54,10 +54,42 @@ import { checkTurnLimit, isReplayedRequest } from "@/src/lib/security/rate-limit
 import { getKBEntry } from "@/src/lib/interview/knowledge-base/index";
 import { logEvalLatency } from "@/src/eval/analytics/logger";
 import { logEvent } from "@/src/lib/security/audit";
+import { getInFlightTurn, trackTurn } from "@/src/lib/interview/orchestration/turn-inflight";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 
+/**
+ * Idempotency wrapper. A request carrying a clientRequestId that is already being processed
+ * joins that work and gets the same response. Retries of a turn that has already finished are
+ * answered from the persisted state.lastResponse inside handleTurn.
+ */
 export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id: interviewId } = await ctx.params;
+  const peek = (await req.clone().json().catch(() => null)) as { clientRequestId?: unknown } | null;
+  const requestId = typeof peek?.clientRequestId === "string" ? peek.clientRequestId : null;
+  if (!requestId) return handleTurn(req, ctx);
+
+  const existing = getInFlightTurn(interviewId, requestId);
+  if (existing) {
+    console.log(`[TURN] '${requestId}' already in flight — joining it`);
+  }
+  const settled = await (existing ??
+    trackTurn(
+      interviewId,
+      requestId,
+      handleTurn(req, ctx).then(async (res) => ({
+        status: res.status,
+        body: await res.text(),
+        contentType: res.headers.get("content-type") ?? "application/json",
+      })),
+    ));
+  return new NextResponse(settled.body, { status: settled.status, headers: { "content-type": settled.contentType } });
+}
+
+async function handleTurn(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -120,7 +152,10 @@ export async function POST(
     const utteranceHash = body.userUtterance.split('').reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0).toString(36).slice(-6);
     const requestId = body.clientRequestId || `${interviewId}_t${state.turnCount}_${utteranceHash}`;
 
-    if (isReplayedRequest(requestId) && state.lastRequestId === requestId && state.lastResponse) {
+    // The persisted state is the source of truth: a retry of the last completed turn gets the
+    // same reply, even after a server restart (the in-memory seen-ID set doesn't survive one).
+    isReplayedRequest(requestId);
+    if (state.lastRequestId === requestId && state.lastResponse) {
       console.log(`[TURN] Idempotent replay '${requestId}' — returning cached reply`);
       return NextResponse.json(state.lastResponse);
     }
@@ -481,23 +516,41 @@ export async function POST(
     }
 
     // ── 11. Persist state ────────────────────────────────────────────────────
-    after(async () => {
-      try {
-        await saveState(interviewId, stateAfterTopic, {
-          currentPhase: currentPhaseMapped,
-          ...(isComplete ? { status: "completed" } : {}),
-        });
+    const persist = async () => {
+      await saveState(interviewId, stateAfterTopic, {
+        currentPhase: currentPhaseMapped,
+        ...(isComplete ? { status: "completed" } : {}),
+      });
 
-        await db
-          .update(interviews)
-          .set({
-            totalTurns: (interview.totalTurns ?? 0) + 1,
-          })
-          .where(eq(interviews.id, interviewId));
+      await db
+        .update(interviews)
+        .set({
+          totalTurns: (interview.totalTurns ?? 0) + 1,
+        })
+        .where(eq(interviews.id, interviewId));
+    };
+
+    if (isComplete) {
+      // The client starts feedback generation as soon as it sees isComplete, so the final
+      // scores and "completed" status must be committed before we reply.
+      try {
+        await persist();
       } catch (dbErr) {
-        console.error("[TURN] after() DB save failed:", dbErr);
+        console.error("[TURN] final state save failed:", dbErr);
+        return NextResponse.json(
+          { error: "Couldn't save the interview state — please retry.", code: "STATE_SAVE_FAILED", retryAfterSec: 2 },
+          { status: 503, headers: { "Retry-After": "2" } },
+        );
       }
-    });
+    } else {
+      after(async () => {
+        try {
+          await persist();
+        } catch (dbErr) {
+          console.error("[TURN] after() DB save failed:", dbErr);
+        }
+      });
+    }
 
     return NextResponse.json(responsePayload);
   } catch (error) {

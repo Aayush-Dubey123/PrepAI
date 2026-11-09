@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/src/components/ui/actions/Button";
 import { Badge } from "@/src/components/ui/actions/Badge";
 import { Textarea } from "@/src/components/ui/forms/Textarea";
@@ -328,15 +328,28 @@ export function VoiceAnswerRenderer({ payload, value, onChange, disabled }: Rend
   const maxDuration = isTarget ? (payload.max_duration_seconds ?? 120) : 120;
   const [secondsLeft, setSecondsLeft] = useState(maxDuration);
 
-  const { isListening, interimTranscript, startListening, stopListening, supportsSpeechRecognition } =
-    useSpeechInput({
-      enabled: isTarget,
-      onFinalTranscript: (chunk) => {
-        if (!isTarget) return;
-        const next = text ? `${text} ${chunk}` : chunk;
-        onChange(next.trim());
-      },
-    });
+  const {
+    isListening,
+    interimTranscript,
+    startListening,
+    stopListening: stopRecognition,
+    takeDraft,
+    supportsSpeechRecognition,
+  } = useSpeechInput({ enabled: isTarget });
+
+  // Stopping the recording appends the spoken draft to the answer text (once).
+  const textRef = useRef(text);
+  useEffect(() => {
+    textRef.current = text;
+  }, [text]);
+  const stopListening = useCallback(() => {
+    stopRecognition();
+    const spoken = takeDraft();
+    if (isTarget && spoken) {
+      const current = textRef.current;
+      onChange((current ? `${current} ${spoken}` : spoken).trim());
+    }
+  }, [stopRecognition, takeDraft, isTarget, onChange]);
 
   // Countdown timer while speaking
   useEffect(() => {

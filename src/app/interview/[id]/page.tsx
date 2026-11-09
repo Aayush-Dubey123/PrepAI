@@ -159,16 +159,18 @@ export default function InterviewStagePage() {
   });
 
   // 4. Speech Recognition Controller (Invariant: explicit user initiation via button or [M]; instantaneous barge-in)
+  // Speech builds a draft; it is only submitted by an explicit action (Finished answer,
+  // Enter in the drawer, quick prompt), never on silence.
   const {
     isListening,
     interimTranscript,
     startListening,
     stopListening,
+    takeDraft,
+    discardDraft,
     supportsSpeechRecognition,
+    transcriptError: speechError,
   } = useSpeechInput({
-    onFinalTranscript: (text) => {
-      void orchestrator.submitAnswer(text);
-    },
     onBargeIn: stopAiSpeech,
     enabled: orchestrator.turnState === "user_turn" || orchestrator.turnState === "ai_speaking",
   });
@@ -234,6 +236,7 @@ export default function InterviewStagePage() {
     if (isListening) {
       stopListening();
     }
+    discardDraft();
     stopAiSpeech();
     void orchestrator.submitAnswer(promptText);
   };
@@ -243,7 +246,8 @@ export default function InterviewStagePage() {
       stopListening();
     }
     stopAiSpeech();
-    const candidateText = (interimTranscript || orchestrator.userInput || "").trim();
+    // takeDraft() returns the spoken answer once and clears it, so it can't be sent twice.
+    const candidateText = [takeDraft(), orchestrator.userInput.trim()].filter(Boolean).join(" ");
     if (candidateText.length > 0) {
       void orchestrator.submitAnswer(candidateText);
     } else {
@@ -403,12 +407,17 @@ export default function InterviewStagePage() {
         onUserInputChange={orchestrator.setUserInput}
         onSubmit={(text) => {
           stopAiSpeech();
-          void orchestrator.submitAnswer(text);
+          if (isListening) stopListening();
+          const typed = (text ?? orchestrator.userInput).trim();
+          const combined = [takeDraft(), typed].filter(Boolean).join(" ");
+          if (combined) void orchestrator.submitAnswer(combined);
         }}
         turnState={orchestrator.turnState}
         isAiThinking={orchestrator.isAiThinking}
         onBargeIn={stopAiSpeech}
-        transcriptError={orchestrator.transcriptError}
+        transcriptError={orchestrator.transcriptError ?? speechError}
+        canRetry={orchestrator.canRetry}
+        onRetry={() => void orchestrator.retryLastAnswer()}
       />
 
       {/* 6. End Interview Confirmation Modal */}

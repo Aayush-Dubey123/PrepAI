@@ -33,15 +33,30 @@ declare global {
   var __pgPool: Pool | undefined;
 }
 
+// Opening a connection to a remote pooler (TLS + auth) costs ~1–1.5 s from India to EU-West,
+// so a long-running server keeps idle connections for 5 min instead of 30 s. That way a user
+// returning after a short pause doesn't pay the handshake again. Serverless keeps a short idle
+// window to avoid holding pooler slots; both values can be overridden via env.
+const envInt = (name: string, fallback: number) => {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
 const pool =
   globalThis.__pgPool ??
   new Pool({
     connectionString,
     ...(requiresSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-    max: isServerless ? 1 : process.env.NODE_ENV === "production" ? 10 : 5,
-    idleTimeoutMillis: isServerless ? 2000 : 30000,
-    connectionTimeoutMillis: 5000,
+    max: envInt("PG_POOL_MAX", isServerless ? 1 : process.env.NODE_ENV === "production" ? 10 : 5),
+    idleTimeoutMillis: envInt("PG_IDLE_TIMEOUT_MS", isServerless ? 2000 : 300_000),
+    connectionTimeoutMillis: envInt("PG_CONNECT_TIMEOUT_MS", 5000),
+    keepAlive: true,
   });
+
+// An idle client that the pooler drops must not crash the process.
+pool.on("error", (err) => {
+  console.warn("[DB_POOL] idle client error:", err.message);
+});
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__pgPool = pool;

@@ -232,7 +232,7 @@ export default async function TechnicalPracticePage() {
           const hasAttempts = (stats?.attempts ?? 0) > 0;
 
           return (
-            <Link key={drill.id} href={`/practice/${drill.slug}`} prefetch={true} className="group flex flex-col h-full focus:outline-hidden">
+            <Link key={drill.id} href={`/practice/${drill.slug}`} className="group flex flex-col h-full focus:outline-hidden">
               <Card className="h-full flex flex-col justify-between hover:border-indigo-300 hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden border-[#e2e8f0]">
                 {/* Top Bar with category & difficulty */}
                 <div className={`px-3.5 py-2 bg-gradient-to-r ${drill.color} border-b border-inherit/40 flex items-center justify-between shrink-0`}>

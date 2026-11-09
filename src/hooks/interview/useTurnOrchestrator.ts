@@ -88,6 +88,12 @@ export function useTurnOrchestrator({
   const isAttemptingOrchestratorRef = useRef(false);
   const hasPlayedInitialGreetingRef = useRef(false);
   const isEndingRef = useRef(false);
+  // Answer saves still in flight; endSession waits for them before starting feedback.
+  const pendingSavesRef = useRef<Set<Promise<unknown>>>(new Set());
+  // The last answer whose save or /turn failed, so "Retry" re-sends it with the same ids
+  // instead of creating a new answer.
+  const pendingRetryRef = useRef<{ text: string; answerId: string; transcript: TranscriptEntry[] } | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
 
   // Latency telemetry
   const sendClientLatencyLog = useCallback(
@@ -109,37 +115,54 @@ export function useTurnOrchestrator({
     [interviewId, transcript.length]
   );
 
-  // Append transcript chunk (exact to commit 10e50d9)
+  // Append a transcript chunk. The chunk id is generated on the client, so a retry with the
+  // same id returns the already-saved row instead of inserting a duplicate. Transient
+  // failures (network, 5xx) are retried with backoff.
   const appendTranscript = useCallback(
-    async (content: string, speaker: "user" | "ai"): Promise<TranscriptEntry> => {
+    async (content: string, speaker: "user" | "ai", id: string = crypto.randomUUID()): Promise<TranscriptEntry> => {
       if (!interviewId) {
         throw new Error("Missing interview session id");
       }
 
-      const payload = { interviewId, content, speaker };
-      console.log("[TRANSCRIPT APPEND] Payload:", payload);
+      const payload = { id, interviewId, content, speaker };
+      const delays = [0, 400, 1200];
+      let lastError: Error = new Error("Failed to persist transcript");
 
-      const response = await fetch("/api/interviews/transcript/append", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      for (const delay of delays) {
+        if (delay) await new Promise((r) => setTimeout(r, delay));
+        let response: Response;
+        try {
+          response = await fetch("/api/interviews/transcript/append", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          continue; // network error → retry
+        }
 
-      const data = await response.json();
-      console.log("[TRANSCRIPT APPEND] Response:", data);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          lastError = new Error(typeof data.error === "string" ? data.error : "Failed to persist transcript");
+          if (response.status >= 500) continue; // transient → retry
+          throw lastError; // 4xx won't succeed on retry
+        }
 
-      if (!response.ok) {
-        throw new Error(
-          typeof data.error === "string" ? data.error : "Failed to persist transcript"
-        );
+        const entry = mapChunkToEntry(data as TranscriptChunkRecord);
+        setTranscript((prev) => (prev.some((e) => e.id === entry.id) ? prev : [...prev, entry]));
+        return entry;
       }
-
-      const entry = mapChunkToEntry(data as TranscriptChunkRecord);
-      setTranscript((prev) => [...prev, entry]);
-      return entry;
+      throw lastError;
     },
     [interviewId]
   );
+
+  const trackSave = useCallback(<T,>(p: Promise<T>): Promise<T> => {
+    pendingSavesRef.current.add(p);
+    p.finally(() => pendingSavesRef.current.delete(p)).catch(() => {});
+    return p;
+  }, []);
 
   // End interview session gracefully (exact to commit 10e50d9)
   const endSession = useCallback(
@@ -161,11 +184,23 @@ export function useTurnOrchestrator({
       setTurnState("processing");
       setCurrentPhase("closed");
 
-      try {
-        fetch(`/api/interviews/${interviewId}/feedback/generate`, {
-          method: "POST",
-        }).catch((e) => console.warn("[END_SESSION] Feedback trigger error:", e));
-      } catch {}
+      // Feedback must not start before every answer is committed.
+      await Promise.allSettled([...pendingSavesRef.current]);
+
+      // The server answers 409 NOT_READY while a /turn is still saving state; retry briefly.
+      // If it still isn't ready, the feedback page generates the report itself.
+      void (async () => {
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            const res = await fetch(`/api/interviews/${interviewId}/feedback/generate`, { method: "POST" });
+            if (res.status !== 409) return;
+          } catch (e) {
+            console.warn("[END_SESSION] Feedback trigger error:", e);
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      })();
 
       router.push(`/interview/${interviewId}/feedback`);
     },
@@ -212,7 +247,11 @@ export function useTurnOrchestrator({
     async (
       userUtterance: string,
       updatedTranscript: TranscriptEntry[],
-      customRequestId?: string
+      customRequestId?: string,
+      // Save of this answer, started in parallel with /turn. The follow-up isn't spoken or
+      // shown until it resolves; if it fails, the answer is offered for retry.
+      answerSave?: Promise<unknown>,
+      retryInfo?: { text: string; answerId: string; transcript: TranscriptEntry[] }
     ) => {
       if (!interviewId) return;
       if (isAttemptingOrchestratorRef.current) {
@@ -280,6 +319,25 @@ export function useTurnOrchestrator({
         const turnResp = (await response.json()) as TurnResponse;
         console.log("[TURN] Response:", turnResp);
 
+        // Don't move on until the answer this follow-up responds to is durably saved.
+        if (answerSave) {
+          try {
+            await answerSave;
+          } catch (saveErr) {
+            console.error("[TURN] Answer save failed; holding the follow-up:", saveErr);
+            setIsAiThinking(false);
+            if (retryInfo) {
+              pendingRetryRef.current = retryInfo;
+              setCanRetry(true);
+            }
+            setTranscriptError("Your answer couldn't be saved. Check your connection and tap Retry.");
+            setTurnState("user_turn");
+            return;
+          }
+        }
+
+        pendingRetryRef.current = null;
+        setCanRetry(false);
         setCurrentPhase(turnResp.phase);
         if (turnResp._dev?.provider) setAiProvider(turnResp._dev.provider);
 
@@ -293,7 +351,18 @@ export function useTurnOrchestrator({
       } catch (error) {
         console.error("[TURN] Error:", error);
         setIsAiThinking(false);
-        setTranscriptError("Couldn't reach the AI — your answer was saved. Tap to retry.");
+        // Retrying re-sends the same answer id and request id: the save is idempotent and
+        // /turn returns the reply it already generated, so nothing is duplicated.
+        if (retryInfo) {
+          pendingRetryRef.current = retryInfo;
+          setCanRetry(true);
+        }
+        const saved = answerSave ? await answerSave.then(() => true, () => false) : true;
+        setTranscriptError(
+          saved
+            ? "Couldn't reach the AI — your answer was saved. Tap Retry."
+            : "Couldn't send your answer. Check your connection and tap Retry."
+        );
         setTurnState("user_turn");
       } finally {
         isAttemptingOrchestratorRef.current = false;
@@ -302,33 +371,50 @@ export function useTurnOrchestrator({
     [interviewId, endSession, speakAiQuestion]
   );
 
-  // Submit candidate answer (exact to commit 10e50d9)
+  // Send one answer: save it and start /turn in parallel under a single answer id.
+  const sendAnswer = useCallback(
+    async (text: string, answerId: string, baseTranscript: TranscriptEntry[]) => {
+      const localEntry: TranscriptEntry = { id: answerId, speaker: "user", text, timestamp: new Date() };
+      const updatedTranscript = [...baseTranscript, localEntry];
+      const answerSave = trackSave(appendTranscript(text, "user", answerId));
+      await callTurn(text, updatedTranscript, `${interviewId}_a_${answerId}`, answerSave, {
+        text,
+        answerId,
+        transcript: baseTranscript,
+      });
+    },
+    [appendTranscript, callTurn, interviewId, trackSave]
+  );
+
   const submitAnswer = useCallback(
     async (text?: string) => {
       const finalText = (text || userInput).trim();
       if (!finalText || (turnState !== "user_turn" && turnState !== "ai_speaking")) return;
+      // One submission at a time: a second click or a late speech result is ignored.
+      if (isAttemptingOrchestratorRef.current) return;
 
       onStopAiSpeech?.();
       sendClientLatencyLog("candidate_speech_end");
       setUserInput("");
       setTranscriptError(null);
       setTurnState("processing");
+      pendingRetryRef.current = null;
+      setCanRetry(false);
 
-      try {
-        const newEntry = await appendTranscript(finalText, "user");
-        const updatedTranscript = [...transcript, newEntry];
-        await callTurn(finalText, updatedTranscript);
-      } catch (error) {
-        setTranscriptError(
-          error instanceof Error
-            ? `Failed to send your response: ${error.message}. Please try again or use text input.`
-            : "Failed to send your response. Please try again or use text input."
-        );
-        setTurnState("user_turn");
-      }
+      await sendAnswer(finalText, crypto.randomUUID(), transcript);
     },
-    [userInput, turnState, onStopAiSpeech, sendClientLatencyLog, appendTranscript, transcript, callTurn]
+    [userInput, turnState, onStopAiSpeech, sendClientLatencyLog, sendAnswer, transcript]
   );
+
+  // Re-send the last failed answer with the same ids (no duplicate answer, no second follow-up).
+  const retryLastAnswer = useCallback(async () => {
+    const pending = pendingRetryRef.current;
+    if (!pending || isAttemptingOrchestratorRef.current) return;
+    setTranscriptError(null);
+    setCanRetry(false);
+    setTurnState("processing");
+    await sendAnswer(pending.text, pending.answerId, pending.transcript);
+  }, [sendAnswer]);
 
   // Load session on mount (exact to commit 10e50d9)
   useEffect(() => {
@@ -463,6 +549,8 @@ export function useTurnOrchestrator({
     aiProvider,
     elapsedSeconds,
     submitAnswer,
+    retryLastAnswer,
+    canRetry,
     endSession,
     appendTranscript,
     sendClientLatencyLog,

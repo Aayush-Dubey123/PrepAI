@@ -1,13 +1,20 @@
 /**
  * TTS proxy route (Sarvam Bulbul v3).
  *
- * Phase C improvements:
  * - Strip markdown, code blocks, URLs, emojis before synthesis
  * - Hash-based cache key (sha256 of text+voice) — safe for large inputs
- * - Per-user daily character budget (tracked in memory, reset midnight UTC)
- * - Global daily character budget cap
- * - Fallback to browser SpeechSynthesis with { fallback: true } signal
+ * - Per-user and global daily character budgets, configurable via env
+ *   (charged only for characters Sarvam actually synthesised; cache hits are free)
+ * - Per-chunk request timeout
+ * - Multiple free-tier keys (SARVAM_API_KEYS=key1,key2): a key that reports quota
+ *   exhaustion is skipped until the next UTC day, and the next key is tried
+ * - Fallback to browser SpeechSynthesis with { fallback: true, cause, reason }, where
+ *   `cause` tells quota exhaustion apart from timeouts and provider errors
  * - Returns JSON on every error path
+ *
+ * Budget counters live in process memory: they are per server instance and reset on restart,
+ * so treat them as an approximate guard. The provider quota is the real limit, which is why
+ * quota responses from Sarvam are classified and logged as `quota_exhausted`.
  */
 
 import { auth } from "@clerk/nextjs/server";
@@ -18,14 +25,31 @@ import { logEvalLatency } from "@/src/eval/analytics/logger";
 import { logEvent } from "@/src/lib/security/audit";
 import { checkTtsLimit } from "@/src/lib/security/rate-limit";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const envInt = (name: string, fallback: number) => {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
 
 const SARVAM_API = "https://api.sarvam.ai/text-to-speech";
-const MAX_CHUNK_CHARS = 400;         // Sarvam Bulbul v3 safe limit
-const MAX_TEXT_CHARS = 2000;         // Per-request input cap
-const GLOBAL_DAILY_CHARS = 200_000; // ~400 interview turns/day globally
-const USER_DAILY_CHARS = 5_000;     // Per-user daily budget
+const MAX_CHUNK_CHARS = 400;                                          // Sarvam Bulbul v3 safe limit
+const MAX_TEXT_CHARS = 2000;                                          // Per-request input cap
+const GLOBAL_DAILY_CHARS = envInt("SARVAM_GLOBAL_DAILY_CHARS", 200_000);
+const USER_DAILY_CHARS = envInt("SARVAM_USER_DAILY_CHARS", 5_000);
+const CHUNK_TIMEOUT_MS = envInt("SARVAM_TIMEOUT_MS", 8_000);
+const RATE_LIMIT_COOLDOWN_MS = 60_000;                                // short pause after a per-minute 429
 const CACHE_MAX_ENTRIES = 500;
+
+/** Why a request fell back to browser speech. Returned to the client and logged. */
+type FallbackCause =
+  | "quota_exhausted"   // Sarvam says the key's quota/credits are used up, or the local daily cap is reached
+  | "rate_limited"      // per-minute limit (Sarvam 429 without quota wording, or our own TTS rate limiter)
+  | "timeout"           // a chunk didn't return within SARVAM_TIMEOUT_MS
+  | "provider_error"    // 5xx, malformed response, network failure
+  | "auth_error"        // every configured key was rejected (401/403 without quota wording)
+  | "not_configured"    // no key set
+  | "empty_text";       // nothing left to speak after preprocessing
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
@@ -58,25 +82,54 @@ function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function checkAndDeductBudget(userId: string, charCount: number): boolean {
+function userBudget(userId: string): DailyBudget {
   const today = todayUTC();
-
-  // Reset global budget on new day
-  if (globalBudget.date !== today) {
-    globalBudget = { chars: 0, date: today };
-  }
-  if (globalBudget.chars + charCount > GLOBAL_DAILY_CHARS) return false;
-
-  // Reset per-user budget on new day
+  if (globalBudget.date !== today) globalBudget = { chars: 0, date: today };
   const ub = userBudgets.get(userId) ?? { chars: 0, date: today };
   if (ub.date !== today) { ub.chars = 0; ub.date = today; }
-  if (ub.chars + charCount > USER_DAILY_CHARS) return false;
+  userBudgets.set(userId, ub);
+  return ub;
+}
 
-  // Deduct
+/** Checks without deducting, so failed synthesis doesn't consume budget. */
+function hasBudget(userId: string, charCount: number): boolean {
+  const ub = userBudget(userId);
+  return globalBudget.chars + charCount <= GLOBAL_DAILY_CHARS && ub.chars + charCount <= USER_DAILY_CHARS;
+}
+
+function deductBudget(userId: string, charCount: number): void {
+  const ub = userBudget(userId);
   globalBudget.chars += charCount;
   ub.chars += charCount;
-  userBudgets.set(userId, ub);
-  return true;
+}
+
+// ─── API keys ─────────────────────────────────────────────────────────────────
+
+/** Keys from SARVAM_API_KEYS (comma-separated), falling back to SARVAM_API_KEY. */
+function configuredKeys(): string[] {
+  const list = (process.env.SARVAM_API_KEYS ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  if (list.length > 0) return list;
+  const single = process.env.SARVAM_API_KEY?.trim();
+  return single ? [single] : [];
+}
+
+// key fingerprint → unavailable until (epoch ms)
+const keyBlockedUntil = new Map<string, number>();
+
+const keyId = (key: string) => createHash("sha256").update(key).digest("hex").slice(0, 8);
+
+function nextUtcMidnight(): number {
+  const d = new Date();
+  d.setUTCHours(24, 0, 0, 0);
+  return d.getTime();
+}
+
+function availableKeys(): string[] {
+  const now = Date.now();
+  return configuredKeys().filter((k) => (keyBlockedUntil.get(keyId(k)) ?? 0) <= now);
 }
 
 // ─── Text preprocessing ───────────────────────────────────────────────────────
@@ -139,14 +192,123 @@ function chunkText(text: string, maxLen = MAX_CHUNK_CHARS): string[] {
   return chunks.length > 0 ? chunks : [text];
 }
 
-function fallbackResponse(req: NextRequest, userId: string, sessionId: string | null | undefined, reason: string) {
+// ─── Sarvam call ──────────────────────────────────────────────────────────────
+
+class SynthesisError extends Error {
+  constructor(public kind: FallbackCause, message: string, public status?: number) {
+    super(message);
+  }
+}
+
+const QUOTA_WORDING = /quota|credit|insufficient|limit exceeded|exhausted|balance/i;
+
+async function synthesizeChunk(chunk: string, speaker: string, key: string): Promise<string> {
+  let resp: Response;
+  try {
+    resp = await fetch(SARVAM_API, {
+      method: "POST",
+      headers: {
+        "api-subscription-key": key,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        inputs: [chunk],
+        target_language_code: "en-IN",
+        speaker,
+        pitch: 0,
+        pace: 1.05,
+        loudness: 1.5,
+        speech_sample_rate: 22050,
+        enable_preprocessing: true,
+        model: "bulbul:v3",
+      }),
+      signal: AbortSignal.timeout(CHUNK_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new SynthesisError("timeout", `Sarvam chunk timed out after ${CHUNK_TIMEOUT_MS}ms`);
+    }
+    throw new SynthesisError("provider_error", `Sarvam network error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    const detail = errText.slice(0, 160);
+    console.warn(`[TTS] Sarvam returned ${resp.status} key=${keyId(key)}: ${detail}`);
+    if ((resp.status === 429 || resp.status === 402 || resp.status === 403) && QUOTA_WORDING.test(errText) && !/per minute|rate/i.test(errText)) {
+      throw new SynthesisError("quota_exhausted", `Sarvam quota exhausted (${resp.status})`, resp.status);
+    }
+    if (resp.status === 429) throw new SynthesisError("rate_limited", "Sarvam rate limit (429)", 429);
+    if (resp.status === 401 || resp.status === 403) throw new SynthesisError("auth_error", `Sarvam rejected key (${resp.status})`, resp.status);
+    throw new SynthesisError("provider_error", `Sarvam API error ${resp.status}`, resp.status);
+  }
+
+  const data = await resp.json().catch(() => null);
+  if (!data?.audios?.[0]) {
+    throw new SynthesisError("provider_error", "No audio returned for chunk");
+  }
+  return data.audios[0] as string;
+}
+
+/**
+ * Synthesises all chunks with one key; on quota/auth/rate errors marks that key unavailable
+ * and retries with the next one. Timeouts and provider errors fall back immediately, since a
+ * different key won't fix a slow or failing provider.
+ */
+async function synthesizeWithKeys(chunks: string[], speaker: string): Promise<string[]> {
+  const keys = availableKeys();
+  if (keys.length === 0) {
+    throw configuredKeys().length === 0
+      ? new SynthesisError("not_configured", "TTS service not configured")
+      : new SynthesisError("quota_exhausted", "All Sarvam keys are exhausted or blocked for today");
+  }
+
+  let lastErr: SynthesisError | null = null;
+  for (const key of keys) {
+    try {
+      return await Promise.all(chunks.map((c) => synthesizeChunk(c, speaker, key)));
+    } catch (err) {
+      const e = err instanceof SynthesisError ? err : new SynthesisError("provider_error", String(err));
+      lastErr = e;
+      if (e.kind === "quota_exhausted") {
+        keyBlockedUntil.set(keyId(key), nextUtcMidnight());
+        console.error(`[TTS] QUOTA EXHAUSTED for key ${keyId(key)}; skipping it until next UTC day. Add another free-tier key to SARVAM_API_KEYS.`);
+        continue;
+      }
+      if (e.kind === "auth_error") {
+        keyBlockedUntil.set(keyId(key), Date.now() + 10 * 60_000);
+        continue;
+      }
+      if (e.kind === "rate_limited") {
+        keyBlockedUntil.set(keyId(key), Date.now() + RATE_LIMIT_COOLDOWN_MS);
+        continue;
+      }
+      throw e;
+    }
+  }
+  if (lastErr?.kind === "quota_exhausted") {
+    console.error("[TTS] QUOTA EXHAUSTED on every configured Sarvam key — falling back to browser speech.");
+  }
+  throw lastErr ?? new SynthesisError("provider_error", "TTS synthesis failed");
+}
+
+// ─── Responses ────────────────────────────────────────────────────────────────
+
+function fallbackResponse(
+  req: NextRequest,
+  userId: string,
+  sessionId: string | null | undefined,
+  cause: FallbackCause,
+  reason: string,
+) {
   logEvent(req, {
     userId,
     sessionId,
     type: "tts_fallback",
-    meta: { reason },
+    meta: { cause, reason },
   });
-  return NextResponse.json({ fallback: true, reason });
+  return NextResponse.json({ fallback: true, cause, reason });
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
@@ -165,7 +327,7 @@ export async function POST(req: NextRequest) {
     const rl = checkTtsLimit(userId);
     if (!rl.allowed) {
       logEvent(req, { userId, sessionId, type: "rate_limited", meta: { bucket: "tts" } });
-      return fallbackResponse(req, userId, sessionId, "TTS rate limit exceeded");
+      return fallbackResponse(req, userId, sessionId, "rate_limited", "TTS rate limit exceeded");
     }
 
     const body = TTSRequestSchema.parse(await req.json());
@@ -174,34 +336,26 @@ export async function POST(req: NextRequest) {
     // Strip markdown / emoji / code before TTS
     const cleanText = stripForTTS(body.text);
     if (!cleanText) {
-      return fallbackResponse(req, userId, sessionId, "Text empty after preprocessing");
+      return fallbackResponse(req, userId, sessionId, "empty_text", "Text empty after preprocessing");
     }
 
     const key = cacheKey(cleanText, speaker);
 
-    // Cache hit
+    // Cache hit — free, no budget charged
     if (ttsCache.has(key)) {
       console.log(`[TTS] Cache HIT speaker=${speaker} len=${cleanText.length}`);
       return NextResponse.json({ audios: ttsCache.get(key), cached: true, fallback: false });
     }
 
-    // Budget check
-    if (!checkAndDeductBudget(userId, cleanText.length)) {
-      console.warn(`[TTS] Budget exceeded for user=${userId} len=${cleanText.length}`);
-      return fallbackResponse(req, userId, sessionId, "Daily TTS character budget reached");
-    }
-
-    const sarvamKey = process.env.SARVAM_API_KEY;
-    if (!sarvamKey) {
-      console.warn("[TTS] SARVAM_API_KEY not configured");
-      return fallbackResponse(req, userId, sessionId, "TTS service not configured");
+    if (!hasBudget(userId, cleanText.length)) {
+      console.warn(`[TTS] Local daily budget reached user=${userId} len=${cleanText.length} global=${globalBudget.chars}/${GLOBAL_DAILY_CHARS}`);
+      return fallbackResponse(req, userId, sessionId, "quota_exhausted", "Daily TTS character budget reached");
     }
 
     const chunks = chunkText(cleanText);
-    console.log(`[TTS] Synthesizing ${chunks.length} chunk(s) speaker=${speaker} totalChars=${cleanText.length}`);
+    console.log(`[TTS] Synthesizing ${chunks.length} chunk(s) speaker=${speaker} charsSent=${cleanText.length}`);
 
     const ttsStart = Date.now();
-
     logEvalLatency({
       interviewId: "active_session",
       turnId: "current",
@@ -209,46 +363,14 @@ export async function POST(req: NextRequest) {
       ts: ttsStart,
     });
 
-    const chunkPromises = chunks.map(async (chunk) => {
-      const resp = await fetch(SARVAM_API, {
-        method: "POST",
-        headers: {
-          "api-subscription-key": sarvamKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inputs: [chunk],
-          target_language_code: "en-IN",
-          speaker,
-          pitch: 0,
-          pace: 1.05,
-          loudness: 1.5,
-          speech_sample_rate: 22050,
-          enable_preprocessing: true,
-          model: "bulbul:v3",
-        }),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text().catch(() => "");
-        console.warn(`[TTS] Sarvam returned ${resp.status}: ${errText.slice(0, 120)}`);
-        throw new Error(`Sarvam API error ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      if (!data.audios?.[0]) {
-        throw new Error("No audio returned for chunk");
-      }
-      return data.audios[0] as string;
-    });
-
     let audioResults: string[];
     try {
-      audioResults = await Promise.all(chunkPromises);
+      audioResults = await synthesizeWithKeys(chunks, speaker);
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "TTS chunk synthesis error";
-      return fallbackResponse(req, userId, sessionId, errMsg);
+      const e = err instanceof SynthesisError ? err : new SynthesisError("provider_error", String(err));
+      return fallbackResponse(req, userId, sessionId, e.kind, e.message);
     }
+
     const ttsFinish = Date.now();
     logEvalLatency({
       interviewId: "active_session",
@@ -259,8 +381,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (audioResults.length === 0) {
-      return fallbackResponse(req, userId, sessionId, "No audio generated");
+      return fallbackResponse(req, userId, sessionId, "provider_error", "No audio generated");
     }
+
+    // Charge only what was actually synthesised
+    deductBudget(userId, cleanText.length);
 
     // Store in cache with LRU eviction
     ttsCache.set(key, audioResults);
@@ -274,10 +399,11 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : "Unexpected TTS error";
     console.error("[TTS] Unexpected error:", message);
     if (reqUserId) {
-      return fallbackResponse(req, reqUserId, reqSessionId, message);
+      return fallbackResponse(req, reqUserId, reqSessionId, "provider_error", message);
     }
     return NextResponse.json({
       fallback: true,
+      cause: "provider_error",
       reason: message,
     });
   }

@@ -66,7 +66,11 @@ export const interviews = pgTable(
     // Candidate screenshot taken during interview
     candidateSnapshot: text("candidate_snapshot"),
   },
-  (table) => [index("interviews_resume_id_idx").on(table.resumeId)],
+  (table) => [
+    index("interviews_resume_id_idx").on(table.resumeId),
+    // Dashboard history and analytics filter by user and sort newest-first.
+    index("interviews_user_id_created_at_idx").on(table.userId, table.createdAt),
+  ],
 );
 
 export const transcriptChunks = pgTable(

@@ -2,6 +2,21 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
+/**
+ * Continuous speech input with an explicit listening state.
+ *
+ * - Recognition runs in continuous mode and builds up a draft answer. Nothing is submitted
+ *   automatically, whether on silence, on a final result or when Chrome ends the session.
+ *   The page submits explicitly via `takeDraft()` ("Finished answer").
+ * - Chrome ends recognition on its own (silence, ~60 s limit, network). While the user still
+ *   wants to listen, the hook restarts it with backoff, and gives up with an error after
+ *   repeated failures in a short window.
+ * - Final results are stored by result index per recognition session, so a result Chrome
+ *   re-delivers never gets appended twice.
+ * - Permission, missing-mic and network errors each get their own message; permission errors
+ *   are never retried.
+ */
+
 export interface SpeechRecognitionResultItem {
   transcript: string;
   confidence: number;
@@ -32,175 +47,196 @@ declare global {
   }
 }
 
+export type ListenState =
+  | "idle"                  // never started
+  | "requesting_permission" // start() called, waiting for onstart (browser may show a permission prompt)
+  | "listening"
+  | "restarting"            // Chrome ended the session; restarting with backoff
+  | "stopped"               // user stopped; draft is kept
+  | "error";                // gave up; see transcriptError
+
 export interface UseSpeechInputOptions {
-  onFinalTranscript: (text: string) => void;
   onBargeIn?: () => void;
   enabled?: boolean;
 }
 
-export function useSpeechInput({
-  onFinalTranscript,
-  onBargeIn,
-  enabled = true,
-}: UseSpeechInputOptions) {
-  const [isListening, setIsListening] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState("");
+interface ActiveRecognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+const RESTART_DELAYS_MS = [250, 500, 1000, 2000];
+const MAX_RESTARTS_IN_WINDOW = 6;
+const RESTART_WINDOW_MS = 30_000;
+
+export function useSpeechInput({ onBargeIn, enabled = true }: UseSpeechInputOptions = {}) {
+  const [listenState, setListenState] = useState<ListenState>("idle");
+  const [draft, setDraft] = useState("");
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [supportsSpeechRecognition, setSupportsSpeechRecognition] = useState<boolean>(false);
 
-  const lastTranscriptRef = useRef<string>("");
-  const onFinalTranscriptRef = useRef(onFinalTranscript);
   const onBargeInRef = useRef(onBargeIn);
-
-  useEffect(() => {
-    onFinalTranscriptRef.current = onFinalTranscript;
-  }, [onFinalTranscript]);
-
   useEffect(() => {
     onBargeInRef.current = onBargeIn;
   }, [onBargeIn]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const isSupported = Boolean(
-        window.SpeechRecognition || window.webkitSpeechRecognition
-      );
-      setSupportsSpeechRecognition(isSupported);
+      setSupportsSpeechRecognition(Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));
     }
   }, []);
 
-  const recognitionRef = useRef<unknown>(null);
-  const isListeningRef = useRef(false);
-  const startListeningRef = useRef<() => void>(() => {});
-  const stopListeningRef = useRef<() => void>(() => {});
+  const recognitionRef = useRef<ActiveRecognition | null>(null);
+  const wantListeningRef = useRef(false);          // user intent
+  const fatalErrorRef = useRef(false);             // permission / no mic: don't restart
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartTimesRef = useRef<number[]>([]);
+  const restartAttemptRef = useRef(0);
 
-  useEffect(() => {
-    isListeningRef.current = isListening;
-  }, [isListening]);
+  // Draft = text committed in earlier recognition sessions + this session's finals + interim.
+  const committedRef = useRef("");
+  const sessionFinalsRef = useRef<string[]>([]);
+  const interimRef = useRef("");
 
-  const stopListening = useCallback(() => {
-    const pendingText = lastTranscriptRef.current.trim();
-    lastTranscriptRef.current = "";
-    setInterimTranscript("");
+  const renderDraft = useCallback(() => {
+    const parts = [committedRef.current, sessionFinalsRef.current.filter(Boolean).join(" "), interimRef.current];
+    setDraft(parts.map((p) => p.trim()).filter(Boolean).join(" "));
+  }, []);
 
-    if (recognitionRef.current) {
+  /** Moves this session's finals (and any leftover interim) into the committed text. */
+  const commitSession = useCallback(() => {
+    const sessionText = [sessionFinalsRef.current.filter(Boolean).join(" "), interimRef.current]
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (sessionText) {
+      committedRef.current = [committedRef.current.trim(), sessionText].filter(Boolean).join(" ");
+    }
+    sessionFinalsRef.current = [];
+    interimRef.current = "";
+  }, []);
+
+  const clearRestartTimer = () => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  };
+
+  const teardown = useCallback(() => {
+    clearRestartTimer();
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (rec) {
+      rec.onstart = rec.onresult = rec.onerror = rec.onend = null;
       try {
-        (recognitionRef.current as { stop: () => void }).stop();
+        rec.abort();
       } catch {}
-      recognitionRef.current = null;
-    }
-    setIsListening(false);
-    isListeningRef.current = false;
-
-    if (pendingText.length > 0) {
-      onFinalTranscriptRef.current(pendingText);
     }
   }, []);
 
-  const startListening = useCallback(() => {
-    if (typeof window === "undefined") return;
+  const startSessionRef = useRef<() => void>(() => {});
 
-    const SpeechRecognitionClass =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionClass) {
-      setTranscriptError("Speech recognition not supported in this browser. Please use text input in transcript drawer.");
+  const scheduleRestart = useCallback(() => {
+    const now = Date.now();
+    restartTimesRef.current = restartTimesRef.current.filter((t) => now - t < RESTART_WINDOW_MS);
+    if (restartTimesRef.current.length >= MAX_RESTARTS_IN_WINDOW) {
+      wantListeningRef.current = false;
+      setListenState("error");
+      setTranscriptError(
+        "Speech recognition keeps stopping (the speech service may be unreachable). Your words so far are kept; you can type the rest."
+      );
       return;
     }
+    restartTimesRef.current.push(now);
+    const delay = RESTART_DELAYS_MS[Math.min(restartAttemptRef.current, RESTART_DELAYS_MS.length - 1)];
+    restartAttemptRef.current++;
+    setListenState("restarting");
+    clearRestartTimer();
+    restartTimerRef.current = setTimeout(() => {
+      restartTimerRef.current = null;
+      if (wantListeningRef.current) startSessionRef.current();
+    }, delay);
+  }, []);
 
-    if (isListeningRef.current) return;
+  const startSession = useCallback(() => {
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) return;
 
-    lastTranscriptRef.current = "";
-
-    // Barge-in: Stop active AI speech immediately
-    onBargeInRef.current?.();
-
-    // Abort and tear down any stale recognition session to avoid InvalidStateError
-    if (recognitionRef.current) {
-      try {
-        (recognitionRef.current as { abort: () => void }).abort();
-      } catch {}
-      recognitionRef.current = null;
-    }
-
-    interface ActiveRecognition {
-      continuous: boolean;
-      interimResults: boolean;
-      lang: string;
-      onstart: () => void;
-      onresult: (e: SpeechRecognitionEventLike) => void;
-      onerror: (e: SpeechRecognitionErrorEventLike) => void;
-      onend: () => void;
-      start: () => void;
-      stop: () => void;
-      abort: () => void;
-    }
-
+    teardown();
     const recognition = new SpeechRecognitionClass() as unknown as ActiveRecognition;
-    // Exact to commit 10e50d9: continuous = false for snappy single-utterance submission
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
     recognition.onstart = () => {
-      setIsListening(true);
-      isListeningRef.current = true;
-      setInterimTranscript("");
-      lastTranscriptRef.current = "";
+      setListenState("listening");
       setTranscriptError(null);
     };
 
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
-      const { resultIndex, results } = event;
-      const currentResult = results[resultIndex];
-
-      if (currentResult?.isFinal) {
-        const finalText = (currentResult[0]?.transcript || "").trim();
-        lastTranscriptRef.current = "";
-        setInterimTranscript("");
-        setIsListening(false);
-        isListeningRef.current = false;
-        if (finalText.length > 0) {
-          onFinalTranscriptRef.current(finalText);
-        }
-      } else if (currentResult?.[0]) {
-        const text = currentResult[0].transcript;
-        lastTranscriptRef.current = text;
-        setInterimTranscript(text);
-        if (text.trim().length > 0) {
-          onBargeInRef.current?.();
+      restartAttemptRef.current = 0; // healthy session → reset backoff
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const text = result?.[0]?.transcript ?? "";
+        if (result?.isFinal) {
+          // Keyed by index: a re-delivered final overwrites instead of appending again.
+          sessionFinalsRef.current[i] = text.trim();
+        } else {
+          interim += text;
         }
       }
+      interimRef.current = interim.trim();
+      if (interimRef.current.length > 0) onBargeInRef.current?.();
+      renderDraft();
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       console.warn("[SPEECH INPUT] Error:", event.error);
-
-      // Transient no-speech pause: candidate paused thinking; do not kill recognition or show alarming red banner
-      if (event.error === "no-speech" || event.error === "aborted") {
-        return;
-      }
-
-      setIsListening(false);
-      isListeningRef.current = false;
-
-      if (event.error === "not-allowed") {
-        setTranscriptError("Microphone permission denied. Click Allow in your browser address bar.");
-      } else if (event.error === "audio-capture") {
-        setTranscriptError("Microphone not detected. Please verify your hardware connection.");
-      } else {
-        setTranscriptError(`Speech recognition notice: ${event.error}. You can also type your response.`);
+      switch (event.error) {
+        case "no-speech":
+        case "aborted":
+          return; // normal pauses; onend restarts quietly while listening
+        case "not-allowed":
+        case "service-not-allowed":
+          fatalErrorRef.current = true;
+          wantListeningRef.current = false;
+          setListenState("error");
+          setTranscriptError(
+            "Microphone permission is blocked. Click the camera/mic icon in the address bar, allow the microphone, then press the mic button again."
+          );
+          return;
+        case "audio-capture":
+          fatalErrorRef.current = true;
+          wantListeningRef.current = false;
+          setListenState("error");
+          setTranscriptError("No microphone detected. Check your mic in the hardware check, or type your answer.");
+          return;
+        case "network":
+          setTranscriptError("Speech service connection dropped — reconnecting…");
+          return; // onend follows; scheduleRestart backs off and eventually gives up
+        default:
+          setTranscriptError(`Speech recognition notice: ${event.error}. You can also type your response.`);
       }
     };
 
     recognition.onend = () => {
-      setIsListening(false);
-      isListeningRef.current = false;
-      const pendingText = lastTranscriptRef.current.trim();
-      if (pendingText.length > 0) {
-        lastTranscriptRef.current = "";
-        setInterimTranscript("");
-        onFinalTranscriptRef.current(pendingText);
+      commitSession();
+      renderDraft();
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
+      if (wantListeningRef.current && !fatalErrorRef.current) {
+        scheduleRestart();
+      } else if (!fatalErrorRef.current) {
+        setListenState("stopped");
       }
     };
 
@@ -209,41 +245,89 @@ export function useSpeechInput({
       recognition.start();
     } catch (e) {
       console.warn("[SPEECH INPUT] start failed:", e);
-      setIsListening(false);
-      isListeningRef.current = false;
+      recognitionRef.current = null;
+      if (wantListeningRef.current) scheduleRestart();
     }
-  }, [onBargeIn]);
+  }, [teardown, commitSession, renderDraft, scheduleRestart]);
 
   useEffect(() => {
-    startListeningRef.current = startListening;
-    stopListeningRef.current = stopListening;
-  }, [startListening, stopListening]);
+    startSessionRef.current = startSession;
+  }, [startSession]);
 
-  // Global [M] keyboard shortcut (exact to commit 10e50d9)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-      if (e.key === "m" || e.key === "M") {
-        e.preventDefault();
-        if (isListeningRef.current) {
-          stopListeningRef.current();
-        } else {
-          startListeningRef.current();
-        }
-      }
-    };
+  const startListening = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+      setTranscriptError("Speech recognition isn't supported in this browser. Please type your answer in the transcript drawer.");
+      setListenState("error");
+      return;
+    }
+    if (wantListeningRef.current && recognitionRef.current) return;
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    onBargeInRef.current?.();
+    wantListeningRef.current = true;
+    fatalErrorRef.current = false;
+    restartAttemptRef.current = 0;
+    restartTimesRef.current = [];
+    setTranscriptError(null);
+    setListenState("requesting_permission");
+    startSession();
+  }, [startSession]);
+
+  /** Stops listening. The draft is kept until takeDraft() or discardDraft(). */
+  const stopListening = useCallback(() => {
+    wantListeningRef.current = false;
+    clearRestartTimer();
+    const rec = recognitionRef.current;
+    if (rec) {
+      try {
+        rec.stop(); // onend commits the session and sets "stopped"
+      } catch {
+        teardown();
+        commitSession();
+        renderDraft();
+        setListenState("stopped");
+      }
+    } else {
+      commitSession();
+      renderDraft();
+      setListenState((s) => (s === "error" ? s : "stopped"));
+    }
+  }, [teardown, commitSession, renderDraft]);
+
+  /** Returns the full draft (including in-progress words) and clears it. */
+  const takeDraft = useCallback((): string => {
+    commitSession();
+    const text = committedRef.current.trim();
+    committedRef.current = "";
+    setDraft("");
+    return text;
+  }, [commitSession]);
+
+  const discardDraft = useCallback(() => {
+    committedRef.current = "";
+    sessionFinalsRef.current = [];
+    interimRef.current = "";
+    setDraft("");
   }, []);
 
+  // Stop when input is disabled (e.g. while the answer is being processed).
+  useEffect(() => {
+    if (!enabled && wantListeningRef.current) stopListening();
+  }, [enabled, stopListening]);
+
+  useEffect(() => () => teardown(), [teardown]);
+
+  const isListening = listenState === "listening" || listenState === "restarting" || listenState === "requesting_permission";
+
   return {
+    listenState,
     isListening,
-    interimTranscript,
+    /** Draft answer so far (finals + in-progress words). Kept name for existing UI. */
+    interimTranscript: draft,
     startListening,
     stopListening,
+    takeDraft,
+    discardDraft,
     supportsSpeechRecognition,
     transcriptError,
     setTranscriptError,

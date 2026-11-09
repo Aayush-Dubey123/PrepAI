@@ -39,18 +39,31 @@ export async function GET(req: NextRequest) {
       conditions.push(inArray(interviews.id, cookieInterviewIds));
     }
 
-    let userInterviews: Array<unknown> = [];
-    try {
-      userInterviews = await db
-        .select()
+    // Select only the columns computeUserAnalytics reads. `select()` also pulled
+    // candidate_snapshot (a screenshot), plan and job_description for every interview.
+    // Interview and gym queries are independent, so they run in parallel.
+    const [userInterviews, gymAnalytics] = await Promise.all([
+      db
+        .select({
+          id: interviews.id,
+          jobRole: interviews.jobRole,
+          status: interviews.status,
+          currentPhase: interviews.currentPhase,
+          score: interviews.score,
+          totalTurns: interviews.totalTurns,
+          createdAt: interviews.createdAt,
+          feedback: interviews.feedback,
+        })
         .from(interviews)
         .where(or(...conditions))
-        .orderBy(desc(interviews.createdAt));
-    } catch (dbErr) {
-      console.warn("[USER_ANALYTICS] Interviews query fallback (tables may be uninitialized):", dbErr);
-    }
+        .orderBy(desc(interviews.createdAt))
+        .catch((dbErr: unknown): Array<unknown> => {
+          console.warn("[USER_ANALYTICS] Interviews query fallback (tables may be uninitialized):", dbErr);
+          return [];
+        }),
+      computeGymAnalytics(userId),
+    ]);
     const analyticsData = computeUserAnalytics(userInterviews);
-    const gymAnalytics = await computeGymAnalytics(userId);
 
     return NextResponse.json(
       {
