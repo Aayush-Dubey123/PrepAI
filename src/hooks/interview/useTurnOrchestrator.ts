@@ -229,14 +229,18 @@ export function useTurnOrchestrator({
         }
       };
 
+      // Show the question right away; waiting for TTS audio to start added seconds of
+      // "Thinking" on every turn. Speech plays alongside the already-visible text.
+      const display = triggerTextDisplay().catch((err) => {
+        console.warn("[SPEAK AI] Failed to save AI line:", err);
+      });
+
       try {
-        await onAiSpeakRequested(questionText, () => {
-          void triggerTextDisplay();
-        });
-        await triggerTextDisplay();
+        await onAiSpeakRequested(questionText);
+        await display;
       } catch (error) {
-        console.warn("[SPEAK AI] Audio playback error, falling back to text display:", error);
-        await triggerTextDisplay();
+        console.warn("[SPEAK AI] Audio playback error, text is already displayed:", error);
+        await display;
       } finally {
         setTurnState("user_turn");
       }
@@ -460,9 +464,26 @@ export function useTurnOrchestrator({
       console.log("[LOAD SESSION] Loading interview:", interviewId);
 
       try {
-        const response = await fetch(
-          `/api/interviews/transcript?interviewId=${interviewId}`
-        );
+        // Never sit on "Thinking" if the load hangs (cold start, DB pool): time out each
+        // attempt and retry once before showing an error.
+        const loadOnce = async () => {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 12_000);
+          try {
+            return await fetch(`/api/interviews/transcript?interviewId=${interviewId}`, {
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timer);
+          }
+        };
+        let response: Response;
+        try {
+          response = await loadOnce();
+        } catch {
+          if (cancelled) return;
+          response = await loadOnce();
+        }
 
         console.log("[LOAD SESSION] Response status:", response.status);
 
@@ -495,7 +516,7 @@ export function useTurnOrchestrator({
         if (entries.length === 0) {
           const firstName =
             interview?.feedback?.candidateProfile?.fullName?.split(" ")[0] || "there";
-          const defaultGreeting = `Hi ${firstName}, welcome! I'm glad you could make it today. Before we begin, is there anything you'd like to check on your end — audio, video, anything like that?`;
+          const defaultGreeting = `Hi ${firstName}, welcome! Can you hear me clearly?`;
           if (!hasPlayedInitialGreetingRef.current) {
             hasPlayedInitialGreetingRef.current = true;
             await speakAiQuestion(defaultGreeting);

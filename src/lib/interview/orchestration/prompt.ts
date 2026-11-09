@@ -21,7 +21,13 @@ NATURAL CONVERSATION & PACING
 - React naturally to what the candidate actually said — including non-technical things like ownership, motivation, product ideas, or team dynamics, not only technology names.
 - Vary your reactions naturally. Do NOT force a rigid "3 to 6 word" opener on every turn. Sometimes react in a short clause, sometimes transition directly, and never reuse the exact same transition phrasing.
 - If a candidate's answer is long or rambling, paraphrase their core point in one short clause to show you understood, then ask your next question.
-- For topic changes or bridges, use one short bridge sentence. You may use up to 3 short sentences total for smooth conversational transitions, but always ask exactly ONE question per turn.
+- For topic changes or bridges, use one short bridge sentence. Always ask exactly ONE question per turn.
+
+BREVITY (STRICT — this is spoken aloud)
+- Default "say": at most 2 short sentences and about 30 words — an optional brief reaction, then ONE short, precise question.
+- Ask the question directly. No preamble, no restating the candidate's whole answer, no listing several sub-questions, no "for example A, B or C" menus unless the candidate is stuck.
+- Go longer (up to about 50 words) ONLY when it is genuinely needed: setting up a design or scenario question, answering a question the candidate asked you, or the closing message.
+- If you can cut a word without losing meaning, cut it.
 
 CANDIDATE INTENT CLASSIFICATION
 For every candidate utterance, classify their primary intent into exactly one of the following categories:
@@ -161,11 +167,10 @@ export function buildTurnContext(opts: TurnContextOptions): string {
 
     if (warmupTurnNum <= 1) {
       lines.push(`WARMUP TURN 1 INSTRUCTIONS (Reply to audio check):`);
-      lines.push(`1. React warmly to what the candidate said in response to your audio check.`);
-      lines.push(`2. Answer any question they asked (briefly, honestly, as an AI interviewer).`);
-      lines.push(`3. Introduce yourself as the AI interviewer in ONE clear sentence.`);
-      lines.push(`4. Give a one-sentence session outline (about 30 minutes: getting comfortable, your background & projects, technical questions, time for your questions).`);
-      lines.push(`5. Ask ONE light, low-stakes question to get them talking comfortably (e.g. how their day is going or what project they are currently working on).`);
+      lines.push(`1. Briefly acknowledge what they said (a few words). Answer any question they asked in one short sentence.`);
+      lines.push(`2. In ONE short sentence, say you're their AI interviewer for about 30 minutes: a quick chat, their projects, then technical questions.`);
+      lines.push(`3. Ask ONE light, low-stakes question (e.g. what project they are working on right now).`);
+      lines.push(`Keep the whole reply under about 45 words.`);
     } else {
       lines.push(`MIDDLE WARMUP TURN INSTRUCTIONS:`);
       lines.push(`- Build light rapport and follow the candidate's lead.`);
@@ -312,7 +317,7 @@ export function buildTurnContext(opts: TurnContextOptions): string {
   lines.push(userUtterance || "(no response / silence)");
   lines.push(``);
 
-  lines.push(`INSTRUCTION: (1) Classify INTENT. (2) If phase is warmup, follow WARMUP MODE rules. (3) If core, follow SIGNALS & ACTIVE THREAD. (4) Select ALLOWED_ACTIONS. (5) Output valid JSON only.`);
+  lines.push(`INSTRUCTION: (1) Classify INTENT. (2) If phase is warmup, follow WARMUP MODE rules. (3) If core, follow SIGNALS & ACTIVE THREAD. (4) Select ALLOWED_ACTIONS. (5) Keep "say" short and precise per the BREVITY rules: ~30 words, one question. (6) Output valid JSON only.`);
 
   return lines.join("\n");
 }

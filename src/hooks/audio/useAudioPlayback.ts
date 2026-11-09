@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
+const SARVAM_FETCH_TIMEOUT_MS = 1800;
+
 export interface UseAudioPlaybackOptions {
   onLatencyLog?: (stage: "audio_playback_start") => void;
   initialProvider?: "sarvam" | "browser";
@@ -91,9 +93,11 @@ export function useAudioPlayback({
     async (text: string, playbackId: number, onAudioStart?: () => void) => {
       const controller = new AbortController();
       abortControllerRef.current = controller;
+      // Sarvam often needs ~4 s for a long line; don't make the candidate wait that long in
+      // silence. Past this, browser TTS takes over for the rest of the session.
       const fetchTimeout = setTimeout(() => {
         controller.abort();
-      }, 2500);
+      }, SARVAM_FETCH_TIMEOUT_MS);
 
       let response: Response;
       try {
@@ -105,7 +109,7 @@ export function useAudioPlayback({
         });
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") {
-          throw new Error("TTS fetch timed out (2.5s) — instant browser TTS fallback");
+          throw new Error(`TTS fetch timed out (${SARVAM_FETCH_TIMEOUT_MS}ms) — browser TTS fallback`);
         }
         throw err;
       } finally {
