@@ -1,6 +1,12 @@
-import { config } from "dotenv";
-config({ path: ".env" });
-config({ path: ".env.local", override: true });
+// Next.js loads .env files itself. Only standalone scripts (tsx scripts, drizzle-kit) need
+// dotenv, so skip it inside the Next server (which also stops the "injected env" log on
+// every route compile).
+if (!process.env.NEXT_RUNTIME) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { config } = require("dotenv") as typeof import("dotenv");
+  config({ path: ".env", quiet: true });
+  config({ path: ".env.local", override: true, quiet: true });
+}
 
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -27,7 +33,7 @@ const requiresSsl =
     connectionString.includes("railway.app") ||
     connectionString.includes("aivencloud.com"));
 
-const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+export const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 declare global {
   var __pgPool: Pool | undefined;
@@ -42,9 +48,8 @@ const envInt = (name: string, fallback: number) => {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-const pool =
-  globalThis.__pgPool ??
-  new Pool({
+function createPool(): Pool {
+  const p = new Pool({
     connectionString,
     ...(requiresSsl ? { ssl: { rejectUnauthorized: false } } : {}),
     max: envInt("PG_POOL_MAX", isServerless ? 1 : process.env.NODE_ENV === "production" ? 10 : 5),
@@ -52,13 +57,38 @@ const pool =
     connectionTimeoutMillis: envInt("PG_CONNECT_TIMEOUT_MS", 5000),
     keepAlive: true,
   });
-
-// An idle client that the pooler drops must not crash the process.
-pool.on("error", (err) => {
-  console.warn("[DB_POOL] idle client error:", err.message);
-});
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__pgPool = pool;
+  // An idle client that the pooler drops must not crash the process.
+  p.on("error", (err) => {
+    console.warn("[DB_POOL] idle client error:", err.message);
+  });
+  return p;
 }
+
+// One pool per process, in every environment, so every route shares the warm connections.
+export const pool = globalThis.__pgPool ?? createPool();
+globalThis.__pgPool = pool;
+
 export const db = drizzle(pool, { schema });
+
+/**
+ * Opens `count` connections in parallel so the first requests don't each pay the handshake
+ * (analytics alone runs 6 queries at once). Errors are logged, never thrown.
+ */
+export async function warmPool(
+  // 6 covers the widest fan-out (Analytics runs 6 queries at once) without hogging pooler slots.
+  { count = envInt("PG_WARM_CONNECTIONS", 6), log = true }: { count?: number; log?: boolean } = {},
+): Promise<void> {
+  const n = Math.min(count, envInt("PG_POOL_MAX", 10));
+  const started = Date.now();
+  const clients = await Promise.allSettled(Array.from({ length: n }, () => pool.connect()));
+  for (const c of clients) {
+    if (c.status === "fulfilled") {
+      await c.value.query("select 1").catch(() => {});
+      c.value.release();
+    }
+  }
+  const ok = clients.filter((c) => c.status === "fulfilled").length;
+  if (log || ok < n) {
+    console.log(`[DB_POOL] warmed ${ok}/${n} connections in ${Date.now() - started}ms`);
+  }
+}

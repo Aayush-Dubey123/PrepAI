@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/src/db/index";
 import { interviews } from "@/src/db/schema";
 import { eq, desc, or, inArray } from "drizzle-orm";
-import { computeUserAnalytics, computeGymAnalytics } from "@/src/lib/analytics/user";
+import { computeUserAnalytics, computeGymAnalytics, resolveRecommendedSet } from "@/src/lib/analytics/user";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +42,9 @@ export async function GET(req: NextRequest) {
     // Select only the columns computeUserAnalytics reads. `select()` also pulled
     // candidate_snapshot (a screenshot), plan and job_description for every interview.
     // Interview and gym queries are independent, so they run in parallel.
-    const [userInterviews, gymAnalytics] = await Promise.all([
-      db
+    // The recommended practice set depends on the interview analytics, so it chains after the
+    // interviews query while the gym queries run alongside.
+    const interviewsPart = db
         .select({
           id: interviews.id,
           jobRole: interviews.jobRole,
@@ -60,10 +61,16 @@ export async function GET(req: NextRequest) {
         .catch((dbErr: unknown): Array<unknown> => {
           console.warn("[USER_ANALYTICS] Interviews query fallback (tables may be uninitialized):", dbErr);
           return [];
-        }),
+        })
+        .then(async (rows) => {
+          const analytics = computeUserAnalytics(rows);
+          return { analytics, recommendedSet: await resolveRecommendedSet(analytics) };
+        });
+
+    const [{ analytics: analyticsData, recommendedSet }, gymAnalytics] = await Promise.all([
+      interviewsPart,
       computeGymAnalytics(userId),
     ]);
-    const analyticsData = computeUserAnalytics(userInterviews);
 
     return NextResponse.json(
       {
@@ -71,6 +78,7 @@ export async function GET(req: NextRequest) {
         data: {
           ...analyticsData,
           gym: gymAnalytics,
+          recommendedSet,
         },
       },
       {

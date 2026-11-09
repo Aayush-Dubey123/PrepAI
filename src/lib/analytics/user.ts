@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/src/db";
-import { drills, drillSessions, concepts, userConceptMastery } from "@/src/db/schema";
+import { drills, drillSessions, concepts, userConceptMastery, practiceSets } from "@/src/db/schema";
 
 export interface UserAnalyticsSummary {
   totalInterviews: number;
@@ -108,7 +108,50 @@ export interface UserAnalyticsData {
     do_not_hire: number;
   };
   gym?: GymAnalyticsData;
+  /** First practice set for the top blind spot, resolved on the server (saves a client round trip). */
+  recommendedSet?: RecommendedPracticeSet | null;
 };
+
+export interface RecommendedPracticeSet {
+  id: string;
+  title: string;
+  drillSlug: string;
+  level: string;
+}
+
+const VALID_DRILL_SLUGS = new Set([
+  "system-design",
+  "algo-logic",
+  "behavioral-star",
+  "frontend-arch",
+  "database-concurrency",
+  "rapid-screen",
+]);
+
+/**
+ * Same choice the Analytics page used to make on the client after a second request to
+ * /api/drills/[slug]/sets: the top blind spot's drill, at "senior" level once the user has
+ * interviews (else "foundational"), falling back to any set of that drill.
+ */
+export async function resolveRecommendedSet(analytics: UserAnalyticsData): Promise<RecommendedPracticeSet | null> {
+  const rawSlug = analytics.topBlindspots?.[0]?.recommendedDrill || "rapid-screen";
+  const drillSlug = VALID_DRILL_SLUGS.has(rawSlug) ? rawSlug : "rapid-screen";
+  const level = (analytics.summary?.totalInterviews ?? 0) > 0 ? "senior" : "foundational";
+  try {
+    const [row] = await db
+      .select({ id: practiceSets.id, title: practiceSets.title, level: practiceSets.level })
+      .from(practiceSets)
+      .innerJoin(drills, eq(drills.id, practiceSets.drillId))
+      .where(eq(drills.slug, drillSlug))
+      .orderBy(sql`(${practiceSets.level} = ${level}) DESC`, practiceSets.sortOrder, practiceSets.slug)
+      .limit(1);
+    // The client keeps the target level for launching even when it falls back to another set.
+    return row ? { id: row.id, title: row.title, drillSlug, level } : null;
+  } catch (err) {
+    console.warn("[ANALYTICS] recommended set lookup failed:", err);
+    return null;
+  }
+}
 
 export interface GymAnalyticsData {
   drillStats: { slug: string; title: string; avgScore: number; attempts: number }[];
