@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Optimize barrel files / package imports to prevent loading 1500+ unneeded icons and heavy modules
   experimental: {
+    agentUpgrade: "security",
     optimizePackageImports: [
       "lucide-react",
       "recharts",
