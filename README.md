@@ -180,6 +180,20 @@ UPSTASH_REDIS_REST_URL=https://...
 UPSTASH_REDIS_REST_TOKEN=...
 ```
 
+## Database API Security
+
+The application accesses PostgreSQL only from server-side route handlers; do not grant Supabase API roles direct access to application tables. On Supabase, every table in `public` MUST have RLS enabled and `anon`, `authenticated`, and `PUBLIC` MUST have no table privileges. This prevents the Data API from exposing resumes, interviews, transcripts, audit events, and user progress.
+
+After creating a new `public` table, run:
+
+```sql
+ALTER TABLE public.<table_name> ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE public.<table_name> FROM PUBLIC, anon, authenticated;
+```
+
+The existing database also revokes these permissions by default for tables created in `public`; the explicit RLS command is still required so the Supabase Security Advisor remains clean.
+
+
 ---
 
 ## 🏃 Running Locally
